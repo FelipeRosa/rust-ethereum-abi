@@ -1,0 +1,11 @@
+[package]
+name = "ethereum_abi"
+version = "0.1.0"
+authors = ["Felipe Rosa <felipe.sgrosa@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+nom = "6.0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+regex = "1.4.2"
