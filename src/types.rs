@@ -14,6 +14,15 @@ pub enum Type {
     Tuple(Vec<Type>),
 }
 
+impl<'de> Deserialize<'de> for Type {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(TypeVisitor)
+    }
+}
+
 struct TypeVisitor;
 
 impl<'de> Visitor<'de> for TypeVisitor {
@@ -33,15 +42,6 @@ impl<'de> Visitor<'de> for TypeVisitor {
             .map_err(|e| serde::de::Error::custom(e.to_string()))?;
 
         Ok(ty)
-    }
-}
-
-impl<'de> Deserialize<'de> for Type {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_str(TypeVisitor)
     }
 }
 
