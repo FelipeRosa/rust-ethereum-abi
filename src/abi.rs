@@ -68,6 +68,20 @@ pub struct Function {
 }
 
 impl Function {
+    pub fn method_id(&self) -> [u8; 4] {
+        use tiny_keccak::{Hasher, Keccak};
+
+        let mut keccak_out = [0u8; 32];
+        let mut hasher = Keccak::v256();
+        hasher.update(self.signature().as_bytes());
+        hasher.finalize(&mut keccak_out);
+
+        let mut mid = [0u8; 4];
+        mid.copy_from_slice(&keccak_out[0..4]);
+
+        mid
+    }
+
     pub fn signature(&self) -> String {
         format!(
             "{}({})",
@@ -193,9 +207,8 @@ impl<'de> Visitor<'de> for AbiVisitor {
 mod test {
     use super::*;
 
-    #[test]
-    fn function_signature() {
-        let fun = Function {
+    fn test_function() -> Function {
+        Function {
             name: "funname".to_string(),
             inputs: vec![
                 Param {
@@ -211,9 +224,19 @@ mod test {
             ],
             outputs: vec![],
             state_mutability: StateMutability::Pure,
-        };
+        }
+    }
 
+    #[test]
+    fn function_signature() {
+        let fun = test_function();
         assert_eq!(fun.signature(), "funname(address,uint56[5])");
+    }
+
+    #[test]
+    fn function_method_id() {
+        let fun = test_function();
+        assert_eq!(fun.method_id(), [0xab, 0xa0, 0xe6, 0x3a]);
     }
 
     #[test]
