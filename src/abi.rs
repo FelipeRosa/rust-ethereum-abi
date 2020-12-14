@@ -35,7 +35,7 @@ impl<'de> Deserialize<'de> for Abi {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AbiEntry {
+struct AbiEntry {
     #[serde(rename = "type")]
     type_: String,
     name: Option<String>,
