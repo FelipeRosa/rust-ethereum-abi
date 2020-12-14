@@ -14,6 +14,23 @@ pub enum Type {
     Tuple(Vec<Type>),
 }
 
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Uint(size) => write!(f, "uint{}", size),
+            Type::Int(size) => write!(f, "int{}", size),
+            Type::Address => write!(f, "address"),
+            Type::Bool => write!(f, "bool"),
+            Type::String => write!(f, "string"),
+            Type::FixedBytes(size) => write!(f, "bytes{}", size),
+            Type::Bytes => write!(f, "bytes"),
+            Type::FixedArray(ty, size) => write!(f, "{}[{}]", ty, size),
+            Type::Array(ty) => write!(f, "{}[]", ty),
+            Type::Tuple(_) => todo!(),
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for Type {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
