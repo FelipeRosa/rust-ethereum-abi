@@ -66,6 +66,21 @@ pub struct Function {
     pub outputs: Vec<Param>,
     pub state_mutability: StateMutability,
 }
+
+impl Function {
+    pub fn signature(&self) -> String {
+        format!(
+            "{}({})",
+            self.name,
+            self.inputs
+                .iter()
+                .map(|param| param.type_.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Event {
     pub name: String,
@@ -177,6 +192,29 @@ impl<'de> Visitor<'de> for AbiVisitor {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn function_signature() {
+        let fun = Function {
+            name: "funname".to_string(),
+            inputs: vec![
+                Param {
+                    name: "".to_string(),
+                    type_: Type::Address,
+                    indexed: None,
+                },
+                Param {
+                    name: "x".to_string(),
+                    type_: Type::FixedArray(Box::new(Type::Uint(56)), 5),
+                    indexed: None,
+                },
+            ],
+            outputs: vec![],
+            state_mutability: StateMutability::Pure,
+        };
+
+        assert_eq!(fun.signature(), "funname(address,uint56[5])");
+    }
 
     #[test]
     fn works() {
