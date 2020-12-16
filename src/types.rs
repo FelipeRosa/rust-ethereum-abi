@@ -14,6 +14,23 @@ pub enum Type {
     Tuple(Vec<Type>),
 }
 
+impl Type {
+    pub fn is_dynamic(&self) -> bool {
+        match self {
+            Type::Uint(_) => false,
+            Type::Int(_) => false,
+            Type::Address => false,
+            Type::Bool => false,
+            Type::FixedBytes(_) => false,
+            Type::FixedArray(ty, _) => ty.is_dynamic(),
+            Type::String => true,
+            Type::Bytes => true,
+            Type::Array(_) => true,
+            Type::Tuple(_) => todo!(),
+        }
+    }
+}
+
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
