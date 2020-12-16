@@ -8,6 +8,8 @@ pub enum Value {
     Int(U256, usize),
     Address(H160),
     Bool(bool),
+    FixedBytes(Vec<u8>),
+    FixedArray(Vec<Value>),
     String(String),
     Bytes(Vec<u8>),
     Array(Vec<Value>),
@@ -60,7 +62,7 @@ impl Value {
                 let at = base_addr + at;
                 let bv = bs[at..(at + size)].to_vec();
 
-                Ok((Value::Bytes(bv), Self::padded32_size(*size)))
+                Ok((Value::FixedBytes(bv), Self::padded32_size(*size)))
             }
 
             Type::FixedArray(ty, size) => {
@@ -89,7 +91,7 @@ impl Value {
                     .map(|(values, consumed)| {
                         let consumed = if ty.is_dynamic() { 32 } else { consumed };
 
-                        (Value::Array(values), consumed)
+                        (Value::FixedArray(values), consumed)
                     })
             }
 
@@ -132,7 +134,14 @@ impl Value {
 
                 let (arr, _) = Self::decode(bs, &Type::FixedArray(ty.clone(), array_len), at, 32)?;
 
-                Ok((arr, 32))
+                let values = if let Value::FixedArray(values) = arr {
+                    values
+                } else {
+                    // should always be Value::FixedArray
+                    unreachable!();
+                };
+
+                Ok((Value::Array(values), 32))
             }
 
             Type::Tuple(_) => todo!(),
@@ -217,7 +226,7 @@ mod test {
 
         let v = Value::decode_from_slice(&bs, &vec![Type::FixedBytes(16)]);
 
-        assert_eq!(v, Ok(vec![Value::Bytes(bs[0..16].to_vec())]));
+        assert_eq!(v, Ok(vec![Value::FixedBytes(bs[0..16].to_vec())]));
     }
 
     #[test]
@@ -241,9 +250,9 @@ mod test {
 
         assert_eq!(
             v,
-            Ok(vec![Value::Array(vec![
-                Value::Array(vec![Value::Uint(uint1, 256), Value::Uint(uint2, 256)]),
-                Value::Array(vec![Value::Uint(uint3, 256), Value::Uint(uint4, 256)])
+            Ok(vec![Value::FixedArray(vec![
+                Value::FixedArray(vec![Value::Uint(uint1, 256), Value::Uint(uint2, 256)]),
+                Value::FixedArray(vec![Value::Uint(uint3, 256), Value::Uint(uint4, 256)])
             ])])
         );
     }
@@ -314,8 +323,8 @@ mod test {
         assert_eq!(
             v,
             Ok(vec![Value::Array(vec![
-                Value::Array(vec![Value::Uint(uint1, 256), Value::Uint(uint2, 256)]),
-                Value::Array(vec![Value::Uint(uint3, 256), Value::Uint(uint4, 256)])
+                Value::FixedArray(vec![Value::Uint(uint1, 256), Value::Uint(uint2, 256)]),
+                Value::FixedArray(vec![Value::Uint(uint3, 256), Value::Uint(uint4, 256)])
             ])])
         );
     }
@@ -342,7 +351,7 @@ mod test {
             Ok(vec![
                 Value::String("abc".to_string()),
                 Value::Uint(U256::from(5), 32),
-                Value::Array(vec![
+                Value::FixedArray(vec![
                     Value::Array(vec![
                         Value::Uint(U256::from(1), 32),
                         Value::Uint(U256::from(2), 32),

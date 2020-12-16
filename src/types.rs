@@ -6,10 +6,10 @@ pub enum Type {
     Int(usize),
     Address,
     Bool,
-    String,
     FixedBytes(usize),
-    Bytes,
     FixedArray(Box<Type>, usize),
+    String,
+    Bytes,
     Array(Box<Type>),
     Tuple(Vec<Type>),
 }
