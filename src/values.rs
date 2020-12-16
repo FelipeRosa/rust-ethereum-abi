@@ -9,10 +9,10 @@ pub enum Value {
     Address(H160),
     Bool(bool),
     FixedBytes(Vec<u8>),
-    FixedArray(Vec<Value>),
+    FixedArray(Vec<Value>, Type),
     String(String),
     Bytes(Vec<u8>),
-    Array(Vec<Value>),
+    Array(Vec<Value>, Type),
     Tuple(Vec<Value>),
 }
 
@@ -26,6 +26,21 @@ impl Value {
                 Ok((values, at + consumed))
             })
             .map(|(values, _)| values)
+    }
+
+    pub fn type_of(&self) -> Type {
+        match self {
+            Value::Uint(_, size) => Type::Uint(*size),
+            Value::Int(_, size) => Type::Int(*size),
+            Value::Address(_) => Type::Address,
+            Value::Bool(_) => Type::Bool,
+            Value::FixedBytes(bytes) => Type::FixedBytes(bytes.len()),
+            Value::FixedArray(values, ty) => Type::FixedArray(Box::new(ty.clone()), values.len()),
+            Value::String(_) => Type::String,
+            Value::Bytes(_) => Type::Bytes,
+            Value::Array(_, ty) => Type::Array(Box::new(ty.clone())),
+            Value::Tuple(_) => todo!(),
+        }
     }
 
     fn decode(bs: &[u8], ty: &Type, base_addr: usize, at: usize) -> Result<(Value, usize), String> {
@@ -91,7 +106,7 @@ impl Value {
                     .map(|(values, consumed)| {
                         let consumed = if ty.is_dynamic() { 32 } else { consumed };
 
-                        (Value::FixedArray(values), consumed)
+                        (Value::FixedArray(values, *ty.clone()), consumed)
                     })
             }
 
@@ -134,14 +149,14 @@ impl Value {
 
                 let (arr, _) = Self::decode(bs, &Type::FixedArray(ty.clone(), array_len), at, 32)?;
 
-                let values = if let Value::FixedArray(values) = arr {
+                let values = if let Value::FixedArray(values, _) = arr {
                     values
                 } else {
                     // should always be Value::FixedArray
                     unreachable!();
                 };
 
-                Ok((Value::Array(values), 32))
+                Ok((Value::Array(values, *ty.clone()), 32))
             }
 
             Type::Tuple(_) => todo!(),
@@ -246,14 +261,24 @@ mod test {
 
         let uint_arr2 = Type::FixedArray(Box::new(Type::Uint(256)), 2);
 
-        let v = Value::decode_from_slice(&bs, &vec![Type::FixedArray(Box::new(uint_arr2), 2)]);
+        let v =
+            Value::decode_from_slice(&bs, &vec![Type::FixedArray(Box::new(uint_arr2.clone()), 2)]);
 
         assert_eq!(
             v,
-            Ok(vec![Value::FixedArray(vec![
-                Value::FixedArray(vec![Value::Uint(uint1, 256), Value::Uint(uint2, 256)]),
-                Value::FixedArray(vec![Value::Uint(uint3, 256), Value::Uint(uint4, 256)])
-            ])])
+            Ok(vec![Value::FixedArray(
+                vec![
+                    Value::FixedArray(
+                        vec![Value::Uint(uint1, 256), Value::Uint(uint2, 256)],
+                        Type::Uint(256)
+                    ),
+                    Value::FixedArray(
+                        vec![Value::Uint(uint3, 256), Value::Uint(uint4, 256)],
+                        Type::Uint(256)
+                    )
+                ],
+                uint_arr2
+            )])
         );
     }
 
@@ -318,14 +343,23 @@ mod test {
 
         let uint_arr2 = Type::FixedArray(Box::new(Type::Uint(256)), 2);
 
-        let v = Value::decode_from_slice(&bs, &vec![Type::Array(Box::new(uint_arr2))]);
+        let v = Value::decode_from_slice(&bs, &vec![Type::Array(Box::new(uint_arr2.clone()))]);
 
         assert_eq!(
             v,
-            Ok(vec![Value::Array(vec![
-                Value::FixedArray(vec![Value::Uint(uint1, 256), Value::Uint(uint2, 256)]),
-                Value::FixedArray(vec![Value::Uint(uint3, 256), Value::Uint(uint4, 256)])
-            ])])
+            Ok(vec![Value::Array(
+                vec![
+                    Value::FixedArray(
+                        vec![Value::Uint(uint1, 256), Value::Uint(uint2, 256)],
+                        Type::Uint(256)
+                    ),
+                    Value::FixedArray(
+                        vec![Value::Uint(uint3, 256), Value::Uint(uint4, 256)],
+                        Type::Uint(256)
+                    )
+                ],
+                uint_arr2
+            )])
         );
     }
 
@@ -351,13 +385,19 @@ mod test {
             Ok(vec![
                 Value::String("abc".to_string()),
                 Value::Uint(U256::from(5), 32),
-                Value::FixedArray(vec![
-                    Value::Array(vec![
-                        Value::Uint(U256::from(1), 32),
-                        Value::Uint(U256::from(2), 32),
-                    ]),
-                    Value::Array(vec![Value::Uint(U256::from(3), 32)]),
-                ]),
+                Value::FixedArray(
+                    vec![
+                        Value::Array(
+                            vec![
+                                Value::Uint(U256::from(1), 32),
+                                Value::Uint(U256::from(2), 32),
+                            ],
+                            Type::Uint(32)
+                        ),
+                        Value::Array(vec![Value::Uint(U256::from(3), 32)], Type::Uint(32)),
+                    ],
+                    Type::Array(Box::new(Type::Uint(32)))
+                ),
             ]),
         );
     }
