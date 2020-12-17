@@ -15,7 +15,7 @@ _Currently under development._
 ### ABI encoder V2
 
 - [x] JSON parsing
-- [ ] Function selectors (method ID)
+- [x] Function selectors (method ID)
 - [x] argument encoding and decoding
 
 ## Example
