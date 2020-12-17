@@ -1,6 +1,6 @@
 use serde::{de::Visitor, Deserialize};
 
-use crate::types::Type;
+use crate::params::Param;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Abi {
@@ -43,14 +43,6 @@ struct AbiEntry {
     outputs: Option<Vec<Param>>,
     state_mutability: Option<StateMutability>,
     anonymous: Option<bool>,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
-pub struct Param {
-    pub name: String,
-    #[serde(rename = "type")]
-    pub type_: Type,
-    pub indexed: Option<bool>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -205,6 +197,8 @@ impl<'de> Visitor<'de> for AbiVisitor {
 
 #[cfg(test)]
 mod test {
+    use crate::types::Type;
+
     use super::*;
 
     fn test_function() -> Function {
