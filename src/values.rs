@@ -128,13 +128,6 @@ impl Value {
                 }
 
                 Value::Tuple(values) => {
-                    buf.resize(buf.len() + 32, 0);
-
-                    // write tuple length
-                    U256::from(values.len())
-                        .to_big_endian(&mut buf[alloc_offset..(alloc_offset + 32)]);
-                    alloc_offset += 32;
-
                     // write tuple values
                     let values = values.iter().map(|(_, value)| value.clone()).collect();
 
@@ -777,13 +770,12 @@ mod test {
             ("b".to_string(), Value::Uint(uint, 256)),
         ]);
 
-        let mut expected_bytes = [0u8; 192];
+        let mut expected_bytes = [0u8; 160];
         expected_bytes[31] = 0x20; // big-endian tuple offset
-        expected_bytes[63] = 2; // big-endian tuple length
-        expected_bytes[95] = 0x40; // big-endian string offset
-        uint.to_big_endian(&mut expected_bytes[96..128]);
-        expected_bytes[159] = 3; // big-endian string length
-        expected_bytes[160..(160 + s.len())].copy_from_slice(s.as_bytes());
+        expected_bytes[63] = 0x40; // big-endian string offset
+        uint.to_big_endian(&mut expected_bytes[64..96]);
+        expected_bytes[127] = 3; // big-endian string length
+        expected_bytes[128..(128 + s.len())].copy_from_slice(s.as_bytes());
 
         assert_eq!(Value::encode(&vec![value]), expected_bytes);
     }
