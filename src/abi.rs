@@ -234,7 +234,7 @@ mod test {
     }
 
     #[test]
-    fn works() {
+    fn works_v1() {
         let s = r#"[{"inputs":[{"internalType":"address","name":"a","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"x","type":"address"},{"indexed":false,"internalType":"uint256","name":"y","type":"uint256"}],"name":"E","type":"event"},{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"}],"name":"f","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"stateMutability":"payable","type":"receive"}]"#;
         let abi = Abi::from_str(s).unwrap();
 
@@ -283,5 +283,73 @@ mod test {
                 has_fallback: false
             }
         )
+    }
+
+    #[test]
+    fn works_v2() {
+        let v = serde_json::json!([
+            {
+                "inputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "n",
+                        "type": "uint256"
+                    },
+                    {
+                        "components": [
+                            {
+                                "internalType": "uint256",
+                                "name": "a",
+                                "type": "uint256"
+                            },
+                            {
+                                "internalType": "string",
+                                "name": "b",
+                                "type": "string"
+                            }
+                        ],
+                        "internalType": "struct A.X",
+                        "name": "x",
+                        "type": "tuple"
+                    }
+                ],
+                "name": "f",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            }
+        ]);
+
+        let abi = Abi::from_str(&v.to_string()).unwrap();
+
+        assert_eq!(
+            abi,
+            Abi {
+                constructor: None,
+                functions: vec![Function {
+                    name: "f".to_string(),
+                    inputs: vec![
+                        Param {
+                            name: "n".to_string(),
+                            type_: Type::Uint(256),
+                            indexed: None,
+                        },
+                        Param {
+                            name: "x".to_string(),
+                            type_: Type::Tuple(vec![
+                                ("a".to_string(), Type::Uint(256)),
+                                ("b".to_string(), Type::String)
+                            ]),
+                            indexed: None,
+                        }
+                    ],
+                    outputs: vec![],
+                    state_mutability: StateMutability::NonPayable,
+                }],
+                events: vec![],
+                has_receive: false,
+                has_fallback: false,
+            }
+        );
     }
 }
