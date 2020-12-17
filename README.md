@@ -9,12 +9,14 @@ _Currently under development._
 ### ABI encoder V1
 
 - [x] JSON parsing
+- [x] Function selectors (method ID)
 - [x] argument encoding and decoding
 
 ### ABI encoder V2
 
-- [ ] ABI V2 JSON parsing
-- [ ] ABI V2 argument encoding and decoding
+- [x] JSON parsing
+- [ ] Function selectors (method ID)
+- [ ] argument encoding and decoding
 
 ## Example
 
@@ -25,5 +27,3 @@ To be done.
 This project is licensed under the [MIT License]
 
 [MIT License]: https://github.com/FelipeRosa/rust-ethereum-abi/blob/main/LICENSE
-
-##
