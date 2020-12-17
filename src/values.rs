@@ -290,13 +290,11 @@ impl Value {
             }
 
             Type::Tuple(tys) => {
+                // Tuples follow the same logic as fixed arrays.
                 let (base_addr, at) = if ty.is_dynamic() {
                     let offset = U256::from_big_endian(&bs[at..(at + 32)]).as_usize();
 
-                    let at = base_addr + offset;
-                    let _tuple_len = U256::from_big_endian(&bs[at..(at + 32)]).as_usize();
-
-                    (at, 32)
+                    (base_addr + offset, 0)
                 } else {
                     (base_addr, at)
                 };
@@ -567,20 +565,19 @@ mod test {
 
     #[test]
     fn decode_tuple() {
-        let mut bs = [0u8; 224];
+        let mut bs = [0u8; 192];
         bs[31] = 0x20; // big-endian tuple offset
-        bs[63] = 3; // big-endian tuple length
 
         // encode some data
         let uint1 = U256::from(5);
         let s = "abc".to_string();
         let addr = H160::random();
 
-        uint1.to_big_endian(&mut bs[64..96]);
-        bs[127] = 0x80; // big-endian string offset
-        bs[140..160].copy_from_slice(addr.as_fixed_bytes());
-        bs[191] = 3; // big-endian string len;
-        bs[192..(192 + s.len())].copy_from_slice(s.as_bytes());
+        uint1.to_big_endian(&mut bs[32..64]);
+        bs[95] = 0x60; // big-endian string offset
+        bs[108..128].copy_from_slice(addr.as_fixed_bytes());
+        bs[159] = 3; // big-endian string len;
+        bs[160..(160 + s.len())].copy_from_slice(s.as_bytes());
 
         let v = Value::decode_from_slice(
             &bs,
