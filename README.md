@@ -16,7 +16,7 @@ _Currently under development._
 
 - [x] JSON parsing
 - [ ] Function selectors (method ID)
-- [ ] argument encoding and decoding
+- [x] argument encoding and decoding
 
 ## Example
 
