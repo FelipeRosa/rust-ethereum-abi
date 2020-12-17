@@ -41,7 +41,14 @@ impl std::fmt::Display for Type {
             Type::Bytes => write!(f, "bytes"),
             Type::FixedArray(ty, size) => write!(f, "{}[{}]", ty, size),
             Type::Array(ty) => write!(f, "{}[]", ty),
-            Type::Tuple(_) => todo!(),
+            Type::Tuple(tys) => write!(
+                f,
+                "({})",
+                tys.iter()
+                    .map(|(_, ty)| format!("{}", ty))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
         }
     }
 }
