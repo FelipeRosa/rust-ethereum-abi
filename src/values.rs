@@ -269,8 +269,7 @@ impl Value {
         buf.resize(buf.len() + 32 + padded_bytes_len, 0);
 
         // write bytes size
-        U256::from(bytes.len())
-            .to_big_endian(&mut buf[alloc_offset..(alloc_offset + 32)]);
+        U256::from(bytes.len()).to_big_endian(&mut buf[alloc_offset..(alloc_offset + 32)]);
         alloc_offset += 32;
 
         // write bytes
@@ -581,7 +580,10 @@ mod test {
         let uint1 = U256::from(57);
         let uint2 = U256::from(109);
 
-        let value = Value::FixedArray(vec![Value::Uint(uint1, 56), Value::Uint(uint2, 56)], Type::Uint(56));
+        let value = Value::FixedArray(
+            vec![Value::Uint(uint1, 56), Value::Uint(uint2, 56)],
+            Type::Uint(56),
+        );
 
         let mut expected_bytes = [0u8; 64];
         uint1.to_big_endian(&mut expected_bytes[0..32]);
@@ -604,7 +606,7 @@ mod test {
         expected_bytes[31] = 0x20; // big-endian offset
         expected_bytes[63] = 0x4a; // big-endian string size (2890 = 0xb4a)
         expected_bytes[62] = 0x0b;
-        expected_bytes[64..(64+2890)].copy_from_slice(s.as_bytes());
+        expected_bytes[64..(64 + 2890)].copy_from_slice(s.as_bytes());
 
         assert_eq!(Value::encode(&vec![Value::String(s)]), expected_bytes);
     }
@@ -614,7 +616,10 @@ mod test {
         let addr1 = H160::random();
         let addr2 = H160::random();
 
-        let value = Value::Array(vec![Value::Address(addr1), Value::Address(addr2)], Type::Address);
+        let value = Value::Array(
+            vec![Value::Address(addr1), Value::Address(addr2)],
+            Type::Address,
+        );
 
         let mut expected_bytes = [0u8; 128];
         expected_bytes[31] = 0x20; // big-endian offset
