@@ -13,7 +13,7 @@ pub enum Value {
     String(String),
     Bytes(Vec<u8>),
     Array(Vec<Value>, Type),
-    Tuple(Vec<Value>),
+    Tuple(Vec<(String, Value)>),
 }
 
 impl Value {
@@ -74,12 +74,10 @@ impl Value {
                     }
                 }
 
-                Value::String(_) | Value::Bytes(_) | Value::Array(_, _) => {
+                Value::String(_) | Value::Bytes(_) | Value::Array(_, _) | Value::Tuple(_) => {
                     alloc_queue.push_back((buf.len(), value));
                     buf.resize(buf.len() + 32, 0);
                 }
-
-                Value::Tuple(_) => todo!(),
             };
         }
 
@@ -118,6 +116,22 @@ impl Value {
                     buf.extend(bytes);
                 }
 
+                Value::Tuple(values) => {
+                    buf.resize(buf.len() + 32, 0);
+
+                    // write tuple length
+                    U256::from(values.len())
+                        .to_big_endian(&mut buf[alloc_offset..(alloc_offset + 32)]);
+                    alloc_offset += 32;
+
+                    // write tuple values
+                    let values = values.iter().map(|(_, value)| value.clone()).collect();
+
+                    let bytes = Self::encode(&values);
+                    alloc_offset += bytes.len();
+                    buf.extend(bytes);
+                }
+
                 _ => panic!(format!(
                     "value of fixed size type {:?} in dynamic alloc area",
                     value
@@ -139,7 +153,12 @@ impl Value {
             Value::String(_) => Type::String,
             Value::Bytes(_) => Type::Bytes,
             Value::Array(_, ty) => Type::Array(Box::new(ty.clone())),
-            Value::Tuple(_) => todo!(),
+            Value::Tuple(values) => Type::Tuple(
+                values
+                    .iter()
+                    .map(|(name, value)| (name.clone(), value.type_of()))
+                    .collect(),
+            ),
         }
     }
 
@@ -628,6 +647,25 @@ mod test {
         expected_bytes[63] = 2; // big-endian array length
         expected_bytes[76..96].copy_from_slice(addr1.as_fixed_bytes());
         expected_bytes[108..128].copy_from_slice(addr2.as_fixed_bytes());
+
+        assert_eq!(Value::encode(&vec![value]), expected_bytes);
+    }
+
+    #[test]
+    fn encode_tuple() {
+        let addr = H160::random();
+        let uint = U256::from(53);
+
+        let value = Value::Tuple(vec![
+            ("a".to_string(), Value::Address(addr)),
+            ("b".to_string(), Value::Uint(uint, 256)),
+        ]);
+
+        let mut expected_bytes = [0u8; 128];
+        expected_bytes[31] = 0x20; // big-endian offset
+        expected_bytes[63] = 2; // big-endian tuple length
+        expected_bytes[76..96].copy_from_slice(addr.as_fixed_bytes());
+        uint.to_big_endian(&mut expected_bytes[96..128]);
 
         assert_eq!(Value::encode(&vec![value]), expected_bytes);
     }
