@@ -65,8 +65,8 @@ impl Value {
                     buf[start..(start + bytes.len())].copy_from_slice(&bytes);
                 }
 
-                Value::FixedArray(values, ty) => {
-                    if ty.is_dynamic() {
+                Value::FixedArray(values, _) => {
+                    if value.type_of().is_dynamic() {
                         alloc_queue.push_back((buf.len(), value));
                         buf.resize(buf.len() + 32, 0);
                     } else {
@@ -74,7 +74,18 @@ impl Value {
                     }
                 }
 
-                Value::String(_) | Value::Bytes(_) | Value::Array(_, _) | Value::Tuple(_) => {
+                Value::Tuple(values) => {
+                    if value.type_of().is_dynamic() {
+                        alloc_queue.push_back((buf.len(), value));
+                        buf.resize(buf.len() + 32, 0);
+                    } else {
+                        let values = values.iter().map(|(_, value)| value.clone()).collect();
+
+                        buf.extend(Self::encode(&values));
+                    }
+                }
+
+                Value::String(_) | Value::Bytes(_) | Value::Array(_, _) => {
                     alloc_queue.push_back((buf.len(), value));
                     buf.resize(buf.len() + 32, 0);
                 }
@@ -652,7 +663,7 @@ mod test {
     }
 
     #[test]
-    fn encode_tuple() {
+    fn encode_fixed_tuple() {
         let addr = H160::random();
         let uint = U256::from(53);
 
@@ -661,11 +672,30 @@ mod test {
             ("b".to_string(), Value::Uint(uint, 256)),
         ]);
 
-        let mut expected_bytes = [0u8; 128];
-        expected_bytes[31] = 0x20; // big-endian offset
+        let mut expected_bytes = [0u8; 64];
+        expected_bytes[12..32].copy_from_slice(addr.as_fixed_bytes());
+        uint.to_big_endian(&mut expected_bytes[32..64]);
+
+        assert_eq!(Value::encode(&vec![value]), expected_bytes);
+    }
+
+    #[test]
+    fn encode_tuple() {
+        let s = "abc".to_string();
+        let uint = U256::from(53);
+
+        let value = Value::Tuple(vec![
+            ("a".to_string(), Value::String(s.clone())),
+            ("b".to_string(), Value::Uint(uint, 256)),
+        ]);
+
+        let mut expected_bytes = [0u8; 192];
+        expected_bytes[31] = 0x20; // big-endian tuple offset
         expected_bytes[63] = 2; // big-endian tuple length
-        expected_bytes[76..96].copy_from_slice(addr.as_fixed_bytes());
+        expected_bytes[95] = 0x40; // big-endian string offset
         uint.to_big_endian(&mut expected_bytes[96..128]);
+        expected_bytes[159] = 3; // big-endian string length
+        expected_bytes[160..(160 + s.len())].copy_from_slice(s.as_bytes());
 
         assert_eq!(Value::encode(&vec![value]), expected_bytes);
     }
