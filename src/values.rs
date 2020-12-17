@@ -8,9 +8,11 @@ pub enum Value {
     Int(U256, usize),
     Address(H160),
     Bool(bool),
+    FixedBytes(Vec<u8>),
+    FixedArray(Vec<Value>, Type),
     String(String),
     Bytes(Vec<u8>),
-    Array(Vec<Value>),
+    Array(Vec<Value>, Type),
     Tuple(Vec<Value>),
 }
 
@@ -24,6 +26,120 @@ impl Value {
                 Ok((values, at + consumed))
             })
             .map(|(values, _)| values)
+    }
+
+    pub fn encode(values: &Vec<Self>) -> Vec<u8> {
+        let mut buf = vec![];
+        let mut alloc_queue = std::collections::VecDeque::new();
+
+        for value in values {
+            match value {
+                Value::Uint(i, _) | Value::Int(i, _) => {
+                    let start = buf.len();
+                    buf.resize(buf.len() + 32, 0);
+
+                    i.to_big_endian(&mut buf[start..(start + 32)]);
+                }
+
+                Value::Address(addr) => {
+                    let start = buf.len();
+                    buf.resize(buf.len() + 32, 0);
+
+                    buf[start..(start + 20)].copy_from_slice(addr.as_fixed_bytes());
+                }
+
+                Value::Bool(b) => {
+                    let start = buf.len();
+                    buf.resize(buf.len() + 32, 0);
+
+                    if *b {
+                        buf[start + 31] = 1;
+                    }
+                }
+
+                Value::FixedBytes(bytes) => {
+                    let start = buf.len();
+                    buf.resize(buf.len() + 32, 0);
+
+                    buf[start..(start + bytes.len())].copy_from_slice(&bytes);
+                }
+
+                Value::FixedArray(values, ty) => {
+                    if ty.is_dynamic() {
+                        alloc_queue.push_back((buf.len(), value));
+                        buf.resize(buf.len() + 32, 0);
+                    } else {
+                        buf.extend(Self::encode(values));
+                    }
+                }
+
+                Value::String(_) | Value::Bytes(_) | Value::Array(_, _) => {
+                    alloc_queue.push_back((buf.len(), value));
+                    buf.resize(buf.len() + 32, 0);
+                }
+
+                Value::Tuple(_) => todo!(),
+            };
+        }
+
+        let mut alloc_offset = buf.len();
+
+        while let Some((at, value)) = alloc_queue.pop_front() {
+            U256::from(alloc_offset).to_big_endian(&mut buf[at..(at + 32)]);
+
+            match value {
+                Value::String(s) => {
+                    alloc_offset = Self::encode_bytes(&mut buf, s.as_bytes(), alloc_offset);
+                }
+
+                Value::Bytes(bytes) => {
+                    alloc_offset = Self::encode_bytes(&mut buf, bytes, alloc_offset);
+                }
+
+                Value::Array(values, _) => {
+                    buf.resize(buf.len() + 32, 0);
+
+                    // write array length
+                    U256::from(values.len())
+                        .to_big_endian(&mut buf[alloc_offset..(alloc_offset + 32)]);
+                    alloc_offset += 32;
+
+                    // write array values
+                    let bytes = Self::encode(values);
+                    alloc_offset += bytes.len();
+                    buf.extend(bytes);
+                }
+
+                Value::FixedArray(values, _) => {
+                    // write array values
+                    let bytes = Self::encode(values);
+                    alloc_offset += bytes.len();
+                    buf.extend(bytes);
+                }
+
+                _ => panic!(format!(
+                    "value of fixed size type {:?} in dynamic alloc area",
+                    value
+                )),
+            };
+        }
+
+        buf
+    }
+
+    pub fn type_of(&self) -> Type {
+        match self {
+            Value::Uint(_, size) => Type::Uint(*size),
+            Value::Int(_, size) => Type::Int(*size),
+            Value::Address(_) => Type::Address,
+            Value::Bool(_) => Type::Bool,
+            Value::FixedBytes(bytes) => Type::FixedBytes(bytes.len()),
+            Value::FixedArray(values, ty) => Type::FixedArray(Box::new(ty.clone()), values.len()),
+            Value::String(_) => Type::String,
+            Value::Bytes(_) => Type::Bytes,
+            Value::Array(_, ty) => Type::Array(Box::new(ty.clone())),
+            Value::Tuple(_) => todo!(),
+        }
     }
 
     fn decode(bs: &[u8], ty: &Type, base_addr: usize, at: usize) -> Result<(Value, usize), String> {
@@ -60,7 +176,7 @@ impl Value {
                 let at = base_addr + at;
                 let bv = bs[at..(at + size)].to_vec();
 
-                Ok((Value::Bytes(bv), Self::padded32_size(*size)))
+                Ok((Value::FixedBytes(bv), Self::padded32_size(*size)))
             }
 
             Type::FixedArray(ty, size) => {
@@ -89,7 +205,7 @@ impl Value {
                     .map(|(values, consumed)| {
                         let consumed = if ty.is_dynamic() { 32 } else { consumed };
 
-                        (Value::Array(values), consumed)
+                        (Value::FixedArray(values, *ty.clone()), consumed)
                     })
             }
 
@@ -132,13 +248,35 @@ impl Value {
 
                 let (arr, _) = Self::decode(bs, &Type::FixedArray(ty.clone(), array_len), at, 32)?;
 
-                Ok((arr, 32))
+                let values = if let Value::FixedArray(values, _) = arr {
+                    values
+                } else {
+                    // should always be Value::FixedArray
+                    unreachable!();
+                };
+
+                Ok((Value::Array(values, *ty.clone()), 32))
             }
 
             Type::Tuple(_) => todo!(),
         };
 
         dec
+    }
+
+    fn encode_bytes(buf: &mut Vec<u8>, bytes: &[u8], mut alloc_offset: usize) -> usize {
+        let padded_bytes_len = Self::padded32_size(bytes.len());
+        buf.resize(buf.len() + 32 + padded_bytes_len, 0);
+
+        // write bytes size
+        U256::from(bytes.len())
+            .to_big_endian(&mut buf[alloc_offset..(alloc_offset + 32)]);
+        alloc_offset += 32;
+
+        // write bytes
+        buf[alloc_offset..(alloc_offset + bytes.len())].copy_from_slice(bytes);
+
+        alloc_offset + padded_bytes_len
     }
 
     // Computes the padded size for a given size, e.g.:
@@ -160,6 +298,7 @@ impl Value {
 mod test {
     use super::*;
 
+    use pretty_assertions::assert_eq;
     use rand::Rng;
 
     #[test]
@@ -217,7 +356,7 @@ mod test {
 
         let v = Value::decode_from_slice(&bs, &vec![Type::FixedBytes(16)]);
 
-        assert_eq!(v, Ok(vec![Value::Bytes(bs[0..16].to_vec())]));
+        assert_eq!(v, Ok(vec![Value::FixedBytes(bs[0..16].to_vec())]));
     }
 
     #[test]
@@ -237,14 +376,24 @@ mod test {
 
         let uint_arr2 = Type::FixedArray(Box::new(Type::Uint(256)), 2);
 
-        let v = Value::decode_from_slice(&bs, &vec![Type::FixedArray(Box::new(uint_arr2), 2)]);
+        let v =
+            Value::decode_from_slice(&bs, &vec![Type::FixedArray(Box::new(uint_arr2.clone()), 2)]);
 
         assert_eq!(
             v,
-            Ok(vec![Value::Array(vec![
-                Value::Array(vec![Value::Uint(uint1, 256), Value::Uint(uint2, 256)]),
-                Value::Array(vec![Value::Uint(uint3, 256), Value::Uint(uint4, 256)])
-            ])])
+            Ok(vec![Value::FixedArray(
+                vec![
+                    Value::FixedArray(
+                        vec![Value::Uint(uint1, 256), Value::Uint(uint2, 256)],
+                        Type::Uint(256)
+                    ),
+                    Value::FixedArray(
+                        vec![Value::Uint(uint3, 256), Value::Uint(uint4, 256)],
+                        Type::Uint(256)
+                    )
+                ],
+                uint_arr2
+            )])
         );
     }
 
@@ -309,14 +458,23 @@ mod test {
 
         let uint_arr2 = Type::FixedArray(Box::new(Type::Uint(256)), 2);
 
-        let v = Value::decode_from_slice(&bs, &vec![Type::Array(Box::new(uint_arr2))]);
+        let v = Value::decode_from_slice(&bs, &vec![Type::Array(Box::new(uint_arr2.clone()))]);
 
         assert_eq!(
             v,
-            Ok(vec![Value::Array(vec![
-                Value::Array(vec![Value::Uint(uint1, 256), Value::Uint(uint2, 256)]),
-                Value::Array(vec![Value::Uint(uint3, 256), Value::Uint(uint4, 256)])
-            ])])
+            Ok(vec![Value::Array(
+                vec![
+                    Value::FixedArray(
+                        vec![Value::Uint(uint1, 256), Value::Uint(uint2, 256)],
+                        Type::Uint(256)
+                    ),
+                    Value::FixedArray(
+                        vec![Value::Uint(uint3, 256), Value::Uint(uint4, 256)],
+                        Type::Uint(256)
+                    )
+                ],
+                uint_arr2
+            )])
         );
     }
 
@@ -342,14 +500,154 @@ mod test {
             Ok(vec![
                 Value::String("abc".to_string()),
                 Value::Uint(U256::from(5), 32),
-                Value::Array(vec![
-                    Value::Array(vec![
-                        Value::Uint(U256::from(1), 32),
-                        Value::Uint(U256::from(2), 32),
-                    ]),
-                    Value::Array(vec![Value::Uint(U256::from(3), 32)]),
-                ]),
+                Value::FixedArray(
+                    vec![
+                        Value::Array(
+                            vec![
+                                Value::Uint(U256::from(1), 32),
+                                Value::Uint(U256::from(2), 32),
+                            ],
+                            Type::Uint(32)
+                        ),
+                        Value::Array(vec![Value::Uint(U256::from(3), 32)], Type::Uint(32)),
+                    ],
+                    Type::Array(Box::new(Type::Uint(32)))
+                ),
             ]),
         );
+    }
+
+    #[test]
+    fn encode_uint() {
+        let value = Value::Uint(U256::from(0xefcdab), 56);
+
+        let mut expected_bytes = [0u8; 32].to_vec();
+        expected_bytes[31] = 0xab;
+        expected_bytes[30] = 0xcd;
+        expected_bytes[29] = 0xef;
+
+        assert_eq!(Value::encode(&vec![value]), expected_bytes);
+    }
+
+    #[test]
+    fn encode_int() {
+        let value = Value::Int(U256::from(0xabcdef), 56);
+
+        let mut expected_bytes = [0u8; 32].to_vec();
+        expected_bytes[31] = 0xef;
+        expected_bytes[30] = 0xcd;
+        expected_bytes[29] = 0xab;
+
+        assert_eq!(Value::encode(&vec![value]), expected_bytes);
+    }
+
+    #[test]
+    fn encode_address() {
+        let addr = H160::random();
+        let value = Value::Address(addr);
+
+        let mut expected_bytes = [0u8; 32].to_vec();
+        expected_bytes[0..20].copy_from_slice(addr.as_fixed_bytes());
+
+        assert_eq!(Value::encode(&vec![value]), expected_bytes);
+    }
+
+    #[test]
+    fn encode_bool() {
+        let mut true_vec = [0u8; 32].to_vec();
+        true_vec[31] = 1;
+
+        let false_vec = [0u8; 32].to_vec();
+
+        assert_eq!(Value::encode(&vec![Value::Bool(true)]), true_vec);
+        assert_eq!(Value::encode(&vec![Value::Bool(false)]), false_vec);
+    }
+
+    #[test]
+    fn encode_fixed_bytes() {
+        let mut bytes = [0u8; 32].to_vec();
+        for i in 0..16 {
+            bytes[i] = i as u8;
+        }
+
+        assert_eq!(
+            Value::encode(&vec![Value::FixedBytes(bytes[0..16].to_vec())]),
+            bytes
+        );
+    }
+
+    #[test]
+    fn encode_fixed_array() {
+        let uint1 = U256::from(57);
+        let uint2 = U256::from(109);
+
+        let value = Value::FixedArray(vec![Value::Uint(uint1, 56), Value::Uint(uint2, 56)], Type::Uint(56));
+
+        let mut expected_bytes = [0u8; 64];
+        uint1.to_big_endian(&mut expected_bytes[0..32]);
+        uint2.to_big_endian(&mut expected_bytes[32..64]);
+
+        assert_eq!(Value::encode(&vec![value]), expected_bytes);
+    }
+
+    #[test]
+    fn encode_string_and_bytes() {
+        // Bytes and strings are encoded in the same way.
+
+        let mut s = String::with_capacity(2890);
+        s.reserve(2890);
+        for i in 0..1000 {
+            s += i.to_string().as_ref();
+        }
+
+        let mut expected_bytes = [0u8; 2976];
+        expected_bytes[31] = 0x20; // big-endian offset
+        expected_bytes[63] = 0x4a; // big-endian string size (2890 = 0xb4a)
+        expected_bytes[62] = 0x0b;
+        expected_bytes[64..(64+2890)].copy_from_slice(s.as_bytes());
+
+        assert_eq!(Value::encode(&vec![Value::String(s)]), expected_bytes);
+    }
+
+    #[test]
+    fn encode_array() {
+        let addr1 = H160::random();
+        let addr2 = H160::random();
+
+        let value = Value::Array(vec![Value::Address(addr1), Value::Address(addr2)], Type::Address);
+
+        let mut expected_bytes = [0u8; 128];
+        expected_bytes[31] = 0x20; // big-endian offset
+        expected_bytes[63] = 2; // big-endian array length
+        expected_bytes[64..84].copy_from_slice(addr1.as_fixed_bytes());
+        expected_bytes[96..116].copy_from_slice(addr2.as_fixed_bytes());
+
+        assert_eq!(Value::encode(&vec![value]), expected_bytes);
+    }
+
+    #[test]
+    fn encode_many() {
+        let values = vec![
+            Value::String("abc".to_string()),
+            Value::Uint(U256::from(5), 32),
+            Value::FixedArray(
+                vec![
+                    Value::Array(
+                        vec![
+                            Value::Uint(U256::from(1), 32),
+                            Value::Uint(U256::from(2), 32),
+                        ],
+                        Type::Uint(32),
+                    ),
+                    Value::Array(vec![Value::Uint(U256::from(3), 32)], Type::Uint(32)),
+                ],
+                Type::Array(Box::new(Type::Uint(32))),
+            ),
+        ];
+
+        let expected = "0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000500000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000036162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000003";
+        let encoded = hex::encode(Value::encode(&values));
+
+        assert_eq!(encoded, expected);
     }
 }
