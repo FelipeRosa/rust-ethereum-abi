@@ -204,7 +204,7 @@ fn parse_tuple(
     }
 }
 
-fn parse_sized<'b>(t: &'b str) -> impl Fn(&'b str) -> IResult<&'b str, usize> {
+fn parse_sized(t: &str) -> impl Fn(&str) -> IResult<&str, usize> + '_ {
     move |input: &str| {
         let (i, _) = tag(t)(input)?;
 
