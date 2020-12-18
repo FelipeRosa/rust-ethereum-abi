@@ -1,3 +1,5 @@
+//! Ethereum Smart Contracts ABI (abstract binary interface) utility library.
+
 mod abi;
 mod params;
 mod types;
