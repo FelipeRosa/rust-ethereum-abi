@@ -2,20 +2,42 @@ use serde::{de::Visitor, Deserialize};
 
 use crate::params::Param;
 
+/// Contract ABI (Abstract Binary Interface).
+///
+/// This struct holds defitions for a contracts' ABI.
+///
+/// ```no_run
+/// use ethereum_abi::Abi;
+///
+/// let abi_json =  r#"[{
+///     "type": "function",
+///     "name": "f",
+///     "inputs": [{"type": "uint256", "name": "x"}]}
+/// ]"#;
+///
+/// let abi = Abi::from_str(abi_json).unwrap();
+/// ```
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Abi {
+    /// Contract constructor definition (if it defines one).
     pub constructor: Option<Constructor>,
+    /// Contract defined functions.
     pub functions: Vec<Function>,
+    /// Contract defined events.
     pub events: Vec<Event>,
+    /// Whether the contract has the receive method defined.
     pub has_receive: bool,
+    /// Whether the contract has the fallback method defined.
     pub has_fallback: bool,
 }
 
 impl Abi {
+    /// Parses a JSON ABI definition from a string.
     pub fn from_str(s: &str) -> Result<Abi, String> {
         serde_json::from_str(s).map_err(|e| e.to_string())
     }
 
+    /// Parses a JSON ABI definition from a reader (e.g. a file handle).
     pub fn from_reader<R>(rdr: R) -> Result<Abi, String>
     where
         R: std::io::Read,
@@ -33,33 +55,30 @@ impl<'de> Deserialize<'de> for Abi {
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AbiEntry {
-    #[serde(rename = "type")]
-    type_: String,
-    name: Option<String>,
-    inputs: Option<Vec<Param>>,
-    outputs: Option<Vec<Param>>,
-    state_mutability: Option<StateMutability>,
-    anonymous: Option<bool>,
-}
-
+/// Contract constructor definition.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Constructor {
+    /// Constructor inputs.
     pub inputs: Vec<Param>,
+    /// Constructor state mutability kind.
     pub state_mutability: StateMutability,
 }
 
+/// Contract function definition.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Function {
+    /// Function name.
     pub name: String,
+    /// Function inputs.
     pub inputs: Vec<Param>,
+    /// Function outputs.
     pub outputs: Vec<Param>,
+    /// Function state mutability kind.
     pub state_mutability: StateMutability,
 }
 
 impl Function {
+    /// Computes the function's method id (function selector).
     pub fn method_id(&self) -> [u8; 4] {
         use tiny_keccak::{Hasher, Keccak};
 
@@ -74,6 +93,7 @@ impl Function {
         mid
     }
 
+    /// Returns the function's signature.
     pub fn signature(&self) -> String {
         format!(
             "{}({})",
@@ -87,20 +107,41 @@ impl Function {
     }
 }
 
+/// Contract event definition.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Event {
+    /// Event name.
     pub name: String,
+    /// Event inputs.
     pub inputs: Vec<Param>,
+    /// Whether the event is anonymous or not.
     pub anonymous: bool,
 }
 
+/// Available state mutability values for functions and constructors.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum StateMutability {
-    Payable,
-    NonPayable,
-    View,
+    /// Specified to not read the blockchain state.
     Pure,
+    /// Specified to not modify the blockchain state.
+    View,
+    /// Does not accept Ether.
+    NonPayable,
+    /// Accepts Ether.
+    Payable,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AbiEntry {
+    #[serde(rename = "type")]
+    type_: String,
+    name: Option<String>,
+    inputs: Option<Vec<Param>>,
+    outputs: Option<Vec<Param>>,
+    state_mutability: Option<StateMutability>,
+    anonymous: Option<bool>,
 }
 
 struct AbiVisitor;

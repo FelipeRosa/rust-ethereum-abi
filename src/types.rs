@@ -1,18 +1,30 @@
+/// Available ABI types.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
+    /// Unsigned int type (uint<M>).
     Uint(usize),
+    /// Signed int type (int<M>).
     Int(usize),
+    /// Address type (address).
     Address,
+    /// Bool type (bool).
     Bool,
+    /// Fixed size bytes type (bytes<M>).
     FixedBytes(usize),
+    /// Fixed size array type (T\[k\])
     FixedArray(Box<Type>, usize),
+    /// UTF-8 string type (string).
     String,
+    /// Dynamic size bytes type (bytes).
     Bytes,
+    /// Dynamic size array type (T[])
     Array(Box<Type>),
+    /// Tuple type (tuple(T1, T2, ..., Tn))
     Tuple(Vec<(String, Type)>),
 }
 
 impl Type {
+    /// Returns whether the given type is a dynamic size type or not.
     pub fn is_dynamic(&self) -> bool {
         match self {
             Type::Uint(_) => false,
