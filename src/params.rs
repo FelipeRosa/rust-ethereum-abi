@@ -4,10 +4,14 @@ use serde::Deserialize;
 
 use crate::types::Type;
 
+/// A definition of a parameter of a function or event.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Param {
+    /// Parameter name.
     pub name: String,
+    /// Parameter type.
     pub type_: Type,
+    /// Whether it is an indexed parameter (events only).
     pub indexed: Option<bool>,
 }
 

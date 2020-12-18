@@ -2,21 +2,35 @@ use ethereum_types::{H160, U256};
 
 use crate::types::Type;
 
+/// ABI decoded value.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Value {
+    /// Unsigned int value (uint<M>).
     Uint(U256, usize),
+    /// Signed int value (int<M>).
     Int(U256, usize),
+    /// Address value (address).
     Address(H160),
+    /// Bool value (bool).
     Bool(bool),
+    /// Fixed size bytes value (bytes<M>).
     FixedBytes(Vec<u8>),
+    /// Fixed size array value (T\[k\]).
     FixedArray(Vec<Value>, Type),
+    /// UTF-8 string value (string).
     String(String),
+    /// Dynamic size bytes value (bytes).
     Bytes(Vec<u8>),
+    /// Dynamic size array value (T[]).
     Array(Vec<Value>, Type),
+    /// Tuple value (tuple(T1, T2, ..., Tn)).
+    ///
+    /// This variant's vector items have the form (name, value).
     Tuple(Vec<(String, Value)>),
 }
 
 impl Value {
+    /// Decodes values from bytes using the given type hint.
     pub fn decode_from_slice(bs: &[u8], tys: &Vec<Type>) -> Result<Vec<Value>, String> {
         tys.iter()
             .try_fold((vec![], 0), |(mut values, at), ty| {
@@ -28,6 +42,7 @@ impl Value {
             .map(|(values, _)| values)
     }
 
+    /// Encodes values into bytes.
     pub fn encode(values: &Vec<Self>) -> Vec<u8> {
         let mut buf = vec![];
         let mut alloc_queue = std::collections::VecDeque::new();
@@ -146,6 +161,7 @@ impl Value {
         buf
     }
 
+    /// Returns the type of the given value.
     pub fn type_of(&self) -> Type {
         match self {
             Value::Uint(_, size) => Type::Uint(*size),
