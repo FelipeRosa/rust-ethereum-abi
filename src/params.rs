@@ -54,11 +54,44 @@ use nom::{
     IResult,
 };
 
-fn parse_exact_type(components: Rc<Option<Vec<ParamEntry>>>, input: &str) -> IResult<&str, Type> {
+#[derive(Debug)]
+enum TypeParseError<I> {
+    Error,
+    NomError(nom::error::Error<I>),
+}
+
+impl<I> From<nom::error::Error<I>> for TypeParseError<I> {
+    fn from(err: nom::error::Error<I>) -> Self {
+        Self::NomError(err)
+    }
+}
+
+impl<I> nom::error::ParseError<I> for TypeParseError<I> {
+    fn from_error_kind(input: I, kind: nom::error::ErrorKind) -> Self {
+        Self::NomError(nom::error::Error::new(input, kind))
+    }
+
+    fn append(_: I, _: nom::error::ErrorKind, other: Self) -> Self {
+        other
+    }
+}
+
+type TypeParseResult<I, O> = IResult<I, O, TypeParseError<I>>;
+
+fn map_error<I, O>(res: IResult<I, O>) -> TypeParseResult<I, O> {
+    res.map_err(|err| err.map(From::from))
+}
+
+fn parse_exact_type(
+    components: Rc<Option<Vec<ParamEntry>>>,
+    input: &str,
+) -> TypeParseResult<&str, Type> {
     exact!(input, parse_type(components.clone()))
 }
 
-fn parse_type(components: Rc<Option<Vec<ParamEntry>>>) -> impl FnMut(&str) -> IResult<&str, Type> {
+fn parse_type(
+    components: Rc<Option<Vec<ParamEntry>>>,
+) -> impl Fn(&str) -> TypeParseResult<&str, Type> {
     move |input: &str| {
         alt((
             parse_array(components.clone()),
@@ -69,7 +102,7 @@ fn parse_type(components: Rc<Option<Vec<ParamEntry>>>) -> impl FnMut(&str) -> IR
 
 fn parse_simple_type(
     components: Rc<Option<Vec<ParamEntry>>>,
-) -> impl Fn(&str) -> IResult<&str, Type> {
+) -> impl Fn(&str) -> TypeParseResult<&str, Type> {
     move |input: &str| {
         alt((
             parse_tuple(components.clone()),
@@ -83,40 +116,48 @@ fn parse_simple_type(
     }
 }
 
-fn parse_uint(input: &str) -> IResult<&str, Type> {
-    verify(parse_sized("uint"), check_int_size)(input).map(|(i, size)| (i, Type::Uint(size)))
+fn parse_uint(input: &str) -> TypeParseResult<&str, Type> {
+    map_error(
+        verify(parse_sized("uint"), check_int_size)(input).map(|(i, size)| (i, Type::Uint(size))),
+    )
 }
 
-fn parse_int(input: &str) -> IResult<&str, Type> {
-    verify(parse_sized("int"), check_int_size)(input).map(|(i, size)| (i, Type::Int(size)))
+fn parse_int(input: &str) -> TypeParseResult<&str, Type> {
+    map_error(
+        verify(parse_sized("int"), check_int_size)(input).map(|(i, size)| (i, Type::Int(size))),
+    )
 }
 
-fn parse_address(input: &str) -> IResult<&str, Type> {
-    tag("address")(input).map(|(i, _)| (i, Type::Address))
+fn parse_address(input: &str) -> TypeParseResult<&str, Type> {
+    map_error(tag("address")(input).map(|(i, _)| (i, Type::Address)))
 }
 
-fn parse_bool(input: &str) -> IResult<&str, Type> {
-    tag("bool")(input).map(|(i, _)| (i, Type::Bool))
+fn parse_bool(input: &str) -> TypeParseResult<&str, Type> {
+    map_error(tag("bool")(input).map(|(i, _)| (i, Type::Bool)))
 }
 
-fn parse_string(input: &str) -> IResult<&str, Type> {
-    tag("string")(input).map(|(i, _)| (i, Type::String))
+fn parse_string(input: &str) -> TypeParseResult<&str, Type> {
+    map_error(tag("string")(input).map(|(i, _)| (i, Type::String)))
 }
 
-fn parse_bytes(input: &str) -> IResult<&str, Type> {
-    let (i, _) = tag("bytes")(input)?;
-    let (i, size) = opt(verify(parse_integer, check_fixed_bytes_size))(i)?;
+fn parse_bytes(input: &str) -> TypeParseResult<&str, Type> {
+    let (i, _) = map_error(tag("bytes")(input))?;
+    let (i, size) = map_error(opt(verify(parse_integer, check_fixed_bytes_size))(i))?;
 
     let ty = size.map_or(Type::Bytes, Type::FixedBytes);
 
     Ok((i, ty))
 }
 
-fn parse_array(components: Rc<Option<Vec<ParamEntry>>>) -> impl Fn(&str) -> IResult<&str, Type> {
+fn parse_array(
+    components: Rc<Option<Vec<ParamEntry>>>,
+) -> impl Fn(&str) -> TypeParseResult<&str, Type> {
     move |input: &str| {
         let (i, ty) = parse_simple_type(components.clone())(input)?;
 
-        let (i, sizes) = many1(delimited(char('['), opt(parse_integer), char(']')))(i)?;
+        let (i, sizes) = map_error(many1(delimited(char('['), opt(parse_integer), char(']')))(
+            i,
+        ))?;
 
         let array_from_size = |ty: Type, size: Option<usize>| match size {
             None => Type::Array(Box::new(ty)),
@@ -130,25 +171,33 @@ fn parse_array(components: Rc<Option<Vec<ParamEntry>>>) -> impl Fn(&str) -> IRes
     }
 }
 
-fn parse_tuple(components: Rc<Option<Vec<ParamEntry>>>) -> impl Fn(&str) -> IResult<&str, Type> {
+fn parse_tuple(
+    components: Rc<Option<Vec<ParamEntry>>>,
+) -> impl Fn(&str) -> TypeParseResult<&str, Type> {
     move |input: &str| {
-        let (i, _) = tag("tuple")(input)?;
+        let (i, _) = map_error(tag("tuple")(input))?;
 
         let tys = match components.clone().as_ref() {
-            Some(cs) => cs.iter().try_fold(vec![], |mut param_tys, param| {
-                let comps = match param.components.as_ref() {
-                    Some(comps) => Some(comps.clone()),
-                    None => None,
-                };
+            Some(cs) => cs
+                .clone()
+                .into_iter()
+                .try_fold(vec![], |mut param_tys, param| {
+                    let comps = match param.components.as_ref() {
+                        Some(comps) => Some(comps.clone()),
+                        None => None,
+                    };
 
-                let (_, ty) = parse_exact_type(Rc::new(comps), &param.type_).unwrap();
+                    let ty = match parse_exact_type(Rc::new(comps), &param.type_) {
+                        Ok((_, ty)) => ty,
+                        Err(_) => return Err(nom::Err::Failure(TypeParseError::Error)),
+                    };
 
-                param_tys.push((param.name.clone(), ty));
+                    param_tys.push((param.name, ty));
 
-                Ok(param_tys)
-            }),
+                    Ok(param_tys)
+                }),
 
-            None => panic!(":("),
+            None => Err(nom::Err::Failure(TypeParseError::Error)),
         }?;
 
         Ok((i, Type::Tuple(tys)))
