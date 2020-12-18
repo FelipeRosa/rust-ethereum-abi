@@ -31,7 +31,7 @@ pub enum Value {
 
 impl Value {
     /// Decodes values from bytes using the given type hint.
-    pub fn decode_from_slice(bs: &[u8], tys: &Vec<Type>) -> Result<Vec<Value>, String> {
+    pub fn decode_from_slice(bs: &[u8], tys: &[Type]) -> Result<Vec<Value>, String> {
         tys.iter()
             .try_fold((vec![], 0), |(mut values, at), ty| {
                 let (value, consumed) = Self::decode(bs, ty, 0, at)?;
@@ -43,7 +43,7 @@ impl Value {
     }
 
     /// Encodes values into bytes.
-    pub fn encode(values: &Vec<Self>) -> Vec<u8> {
+    pub fn encode(values: &[Self]) -> Vec<u8> {
         let mut buf = vec![];
         let mut alloc_queue = std::collections::VecDeque::new();
 
@@ -94,7 +94,8 @@ impl Value {
                         alloc_queue.push_back((buf.len(), value));
                         buf.resize(buf.len() + 32, 0);
                     } else {
-                        let values = values.iter().map(|(_, value)| value.clone()).collect();
+                        let values: Vec<_> =
+                            values.iter().cloned().map(|(_, value)| value).collect();
 
                         buf.extend(Self::encode(&values));
                     }
@@ -144,7 +145,7 @@ impl Value {
 
                 Value::Tuple(values) => {
                     // write tuple values
-                    let values = values.iter().map(|(_, value)| value.clone()).collect();
+                    let values: Vec<_> = values.iter().cloned().map(|(_, value)| value).collect();
 
                     let bytes = Self::encode(&values);
                     alloc_offset += bytes.len();
@@ -309,7 +310,7 @@ impl Value {
                 };
 
                 tys.iter()
-                    .map(|name_type| name_type.clone())
+                    .cloned()
                     .try_fold((vec![], 0), |(mut values, total_consumed), (name, ty)| {
                         let (value, consumed) =
                             Self::decode(bs, &ty, base_addr, at + total_consumed)?;

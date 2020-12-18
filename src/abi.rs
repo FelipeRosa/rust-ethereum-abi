@@ -7,6 +7,7 @@ use crate::params::Param;
 /// This struct holds defitions for a contracts' ABI.
 ///
 /// ```no_run
+/// use std::str::FromStr;
 /// use ethereum_abi::Abi;
 ///
 /// let abi_json =  r#"[{
@@ -32,17 +33,21 @@ pub struct Abi {
 }
 
 impl Abi {
-    /// Parses a JSON ABI definition from a string.
-    pub fn from_str(s: &str) -> Result<Abi, String> {
-        serde_json::from_str(s).map_err(|e| e.to_string())
-    }
-
     /// Parses a JSON ABI definition from a reader (e.g. a file handle).
     pub fn from_reader<R>(rdr: R) -> Result<Abi, String>
     where
         R: std::io::Read,
     {
         serde_json::from_reader(rdr).map_err(|e| e.to_string())
+    }
+}
+
+impl std::str::FromStr for Abi {
+    type Err = String;
+
+    /// Parses a JSON ABI definition from a string.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(s).map_err(|e| e.to_string())
     }
 }
 
@@ -238,6 +243,8 @@ impl<'de> Visitor<'de> for AbiVisitor {
 
 #[cfg(test)]
 mod test {
+    use std::str::FromStr;
+
     use crate::types::Type;
 
     use super::*;
