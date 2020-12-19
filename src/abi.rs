@@ -58,6 +58,16 @@ impl Abi {
 
         Ok((&f, decoded_params))
     }
+
+    // Decode function input from hex string.
+    pub fn decode_input_from_hex<'a>(
+        &'a self,
+        input: &str,
+    ) -> Result<(&'a Function, DecodedParams), String> {
+        let slice = hex::decode(input).map_err(|err| err.to_string())?;
+
+        self.decode_input_from_slice(&slice)
+    }
 }
 
 impl std::str::FromStr for Abi {
