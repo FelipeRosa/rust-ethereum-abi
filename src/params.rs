@@ -35,6 +35,7 @@ impl From<Vec<(Param, Value)>> for DecodedParams {
 
         let named_params = index_params
             .iter()
+            .filter(|decoded_param| !decoded_param.param.name.is_empty())
             .cloned()
             .map(|decoded_param| (decoded_param.param.name.clone(), decoded_param))
             .collect();
