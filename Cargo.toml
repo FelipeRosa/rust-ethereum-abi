@@ -3,6 +3,12 @@ name = "ethereum_abi"
 version = "0.1.0"
 authors = ["Felipe Rosa <felipe.sgrosa@gmail.com>"]
 edition = "2018"
+description = "Ethereum Smart Contract ABI parsing library"
+documentation = "https://docs.rs/ethereum_abi"
+readme = "README.md"
+repository = "https://github.com/FelipeRosa/rust-ethereum-abi"
+license = "MIT"
+keywords = ["abi", "ethereum", "solidity", "web3"]
 
 [dependencies]
 ethereum-types = "0.9.2"
