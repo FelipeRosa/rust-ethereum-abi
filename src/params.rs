@@ -5,6 +5,7 @@ use serde::Deserialize;
 use crate::{types::Type, Value};
 
 /// ABI decoded param value.
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DecodedParam {
     // Param definition.
     pub param: Param,
@@ -21,6 +22,7 @@ impl From<(Param, Value)> for DecodedParam {
 /// ABI decoded values. Fast access by param index and name.
 ///
 /// This struct provides a way for accessing decoded param values by index and by name.
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DecodedParams {
     pub index_params: Vec<Rc<DecodedParam>>,
     pub named_params: HashMap<String, Rc<DecodedParam>>,
