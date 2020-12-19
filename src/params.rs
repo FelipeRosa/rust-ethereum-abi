@@ -1,8 +1,48 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use serde::Deserialize;
 
-use crate::types::Type;
+use crate::{types::Type, Value};
+
+/// ABI decoded param value.
+pub struct DecodedParam {
+    // Param definition.
+    pub param: Param,
+    // Decoded param value.
+    pub value: Value,
+}
+
+impl From<(Param, Value)> for DecodedParam {
+    fn from((param, value): (Param, Value)) -> Self {
+        Self { param, value }
+    }
+}
+
+/// ABI decoded values. Fast access by param index and name.
+///
+/// This struct provides a way for accessing decoded param values by index and by name.
+pub struct DecodedParams {
+    pub index_params: Vec<Rc<DecodedParam>>,
+    pub named_params: HashMap<String, Rc<DecodedParam>>,
+}
+
+impl From<Vec<(Param, Value)>> for DecodedParams {
+    fn from(values: Vec<(Param, Value)>) -> Self {
+        let index_params: Vec<Rc<DecodedParam>> =
+            values.into_iter().map(From::from).map(Rc::new).collect();
+
+        let named_params = index_params
+            .iter()
+            .cloned()
+            .map(|decoded_param| (decoded_param.param.name.clone(), decoded_param))
+            .collect();
+
+        Self {
+            index_params,
+            named_params,
+        }
+    }
+}
 
 /// A definition of a parameter of a function or event.
 #[derive(Debug, Clone, PartialEq, Eq)]

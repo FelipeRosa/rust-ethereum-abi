@@ -1,6 +1,6 @@
 use serde::{de::Visitor, Deserialize};
 
-use crate::params::Param;
+use crate::{params::Param, DecodedParams, Value};
 
 /// Contract ABI (Abstract Binary Interface).
 ///
@@ -39,6 +39,24 @@ impl Abi {
         R: std::io::Read,
     {
         serde_json::from_reader(rdr).map_err(|e| e.to_string())
+    }
+}
+
+impl Abi {
+    // Decode function input from slice.
+    pub fn decode_input_from_slice<'a>(
+        &'a self,
+        input: &[u8],
+    ) -> Result<(&'a Function, DecodedParams), String> {
+        let f = self
+            .functions
+            .iter()
+            .find(|f| f.method_id() == input[0..4])
+            .ok_or_else(|| "ABI function not found".to_string())?;
+
+        let decoded_params = f.decode_input_from_slice(&input[4..])?;
+
+        Ok((&f, decoded_params))
     }
 }
 
@@ -109,6 +127,23 @@ impl Function {
                 .collect::<Vec<_>>()
                 .join(",")
         )
+    }
+
+    // Decode function input from slice.
+    pub fn decode_input_from_slice(&self, input: &[u8]) -> Result<DecodedParams, String> {
+        let inputs_types = self
+            .inputs
+            .iter()
+            .map(|f_input| f_input.type_.clone())
+            .collect::<Vec<_>>();
+
+        Ok(DecodedParams::from(
+            self.inputs
+                .iter()
+                .cloned()
+                .zip(Value::decode_from_slice(input, &inputs_types)?)
+                .collect::<Vec<_>>(),
+        ))
     }
 }
 
