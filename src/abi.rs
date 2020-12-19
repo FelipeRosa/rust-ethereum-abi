@@ -278,7 +278,10 @@ impl<'de> Visitor<'de> for AbiVisitor {
 
 #[cfg(test)]
 mod test {
+    use pretty_assertions::assert_eq;
     use std::str::FromStr;
+
+    use ethereum_types::{H160, U256};
 
     use crate::types::Type;
 
@@ -295,7 +298,7 @@ mod test {
                 },
                 Param {
                     name: "x".to_string(),
-                    type_: Type::FixedArray(Box::new(Type::Uint(56)), 5),
+                    type_: Type::FixedArray(Box::new(Type::Uint(56)), 2),
                     indexed: None,
                 },
             ],
@@ -307,13 +310,53 @@ mod test {
     #[test]
     fn function_signature() {
         let fun = test_function();
-        assert_eq!(fun.signature(), "funname(address,uint56[5])");
+        assert_eq!(fun.signature(), "funname(address,uint56[2])");
     }
 
     #[test]
     fn function_method_id() {
         let fun = test_function();
-        assert_eq!(fun.method_id(), [0xab, 0xa0, 0xe6, 0x3a]);
+        assert_eq!(fun.method_id(), [0x83, 0x1f, 0xc7, 0x20]);
+    }
+
+    #[test]
+    fn abi_function_decode_input_from_slice() {
+        let addr = H160::random();
+        let uint1 = U256::from(37);
+        let uint2 = U256::from(109);
+
+        let input_values = vec![
+            Value::Address(addr),
+            Value::FixedArray(
+                vec![Value::Uint(uint1, 56), Value::Uint(uint2, 56)],
+                Type::Uint(56),
+            ),
+        ];
+
+        let fun = test_function();
+        let abi = Abi {
+            constructor: None,
+            functions: vec![fun],
+            events: vec![],
+            has_receive: false,
+            has_fallback: false,
+        };
+
+        let mut enc_input = abi.functions[0].method_id().to_vec();
+        enc_input.extend(Value::encode(&input_values));
+
+        let dec = abi.decode_input_from_slice(&enc_input);
+
+        let expected_decoded_params = DecodedParams::from(
+            abi.functions[0]
+                .inputs
+                .iter()
+                .cloned()
+                .zip(input_values)
+                .collect::<Vec<(Param, Value)>>(),
+        );
+
+        assert_eq!(dec, Ok((&abi.functions[0], expected_decoded_params)));
     }
 
     #[test]
