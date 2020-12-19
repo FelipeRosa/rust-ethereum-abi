@@ -205,74 +205,82 @@ impl<'de> Visitor<'de> for AbiVisitor {
             has_fallback: false,
         };
 
-        while let Ok(Some(entry)) = seq.next_element::<AbiEntry>() {
-            match entry.type_.as_str() {
-                "receive" => abi.has_receive = true,
+        loop {
+            let entry = seq.next_element::<AbiEntry>()?;
 
-                "fallback" => abi.has_fallback = true,
+            match entry {
+                None => return Ok(abi),
 
-                "constructor" => {
-                    let state_mutability = entry.state_mutability.ok_or_else(|| {
-                        serde::de::Error::custom("missing constructor state mutability".to_string())
-                    })?;
+                Some(entry) => match entry.type_.as_str() {
+                    "receive" => abi.has_receive = true,
 
-                    let inputs = entry.inputs.unwrap_or_default();
+                    "fallback" => abi.has_fallback = true,
 
-                    abi.constructor = Some(Constructor {
-                        inputs,
-                        state_mutability,
-                    });
-                }
+                    "constructor" => {
+                        let state_mutability = entry.state_mutability.ok_or_else(|| {
+                            serde::de::Error::custom(
+                                "missing constructor state mutability".to_string(),
+                            )
+                        })?;
 
-                "function" => {
-                    let state_mutability = entry.state_mutability.ok_or_else(|| {
-                        serde::de::Error::custom("missing constructor state mutability".to_string())
-                    })?;
+                        let inputs = entry.inputs.unwrap_or_default();
 
-                    let inputs = entry.inputs.unwrap_or_default();
+                        abi.constructor = Some(Constructor {
+                            inputs,
+                            state_mutability,
+                        });
+                    }
 
-                    let outputs = entry.outputs.unwrap_or_default();
+                    "function" => {
+                        let state_mutability = entry.state_mutability.ok_or_else(|| {
+                            serde::de::Error::custom(
+                                "missing function state mutability".to_string(),
+                            )
+                        })?;
 
-                    let name = entry.name.ok_or_else(|| {
-                        serde::de::Error::custom("missing function name".to_string())
-                    })?;
+                        let inputs = entry.inputs.unwrap_or_default();
 
-                    abi.functions.push(Function {
-                        name,
-                        inputs,
-                        outputs,
-                        state_mutability,
-                    });
-                }
+                        let outputs = entry.outputs.unwrap_or_default();
 
-                "event" => {
-                    let inputs = entry.inputs.unwrap_or_default();
+                        let name = entry.name.ok_or_else(|| {
+                            serde::de::Error::custom("missing function name".to_string())
+                        })?;
 
-                    let name = entry.name.ok_or_else(|| {
-                        serde::de::Error::custom("missing function name".to_string())
-                    })?;
+                        abi.functions.push(Function {
+                            name,
+                            inputs,
+                            outputs,
+                            state_mutability,
+                        });
+                    }
 
-                    let anonymous = entry.anonymous.ok_or_else(|| {
-                        serde::de::Error::custom("missing event anonymous field".to_string())
-                    })?;
+                    "event" => {
+                        let inputs = entry.inputs.unwrap_or_default();
 
-                    abi.events.push(Event {
-                        name,
-                        inputs,
-                        anonymous,
-                    });
-                }
+                        let name = entry.name.ok_or_else(|| {
+                            serde::de::Error::custom("missing function name".to_string())
+                        })?;
 
-                _ => {
-                    return Err(serde::de::Error::custom(format!(
-                        "invalid ABI entry type: {}",
-                        entry.type_
-                    )))
-                }
+                        let anonymous = entry.anonymous.ok_or_else(|| {
+                            serde::de::Error::custom("missing event anonymous field".to_string())
+                        })?;
+
+                        abi.events.push(Event {
+                            name,
+                            inputs,
+                            anonymous,
+                        });
+                    }
+
+                    _ => {
+                        return Err(serde::de::Error::custom(format!(
+                            "invalid ABI entry type: {}",
+                            entry.type_
+                        )))
+                    }
+                },
             }
         }
-
-        Ok(abi)
     }
 }
 
