@@ -187,36 +187,55 @@ impl Value {
         match ty {
             Type::Uint(size) => {
                 let at = base_addr + at;
-                let uint = U256::from_big_endian(&bs[at..(at + 32)]);
+                let slice = bs
+                    .get(at..(at + 32))
+                    .ok_or_else(|| format!("reached end of input while decoding uint{}", size))?;
+
+                let uint = U256::from_big_endian(slice);
 
                 Ok((Value::Uint(uint, *size), 32))
             }
 
             Type::Int(size) => {
                 let at = base_addr + at;
-                let uint = U256::from_big_endian(&bs[at..(at + 32)]);
+                let slice = bs
+                    .get(at..(at + 32))
+                    .ok_or_else(|| format!("reached end of input while decoding int{}", size))?;
+
+                let uint = U256::from_big_endian(slice);
 
                 Ok((Value::Int(uint, *size), 32))
             }
 
             Type::Address => {
                 let at = base_addr + at;
+                let slice = bs
+                    .get((at + 12)..(at + 32))
+                    .ok_or_else(|| "reached end of input while decoding address".to_string())?;
+
                 // big-endian, same as if it were a uint160.
-                let addr = H160::from_slice(&bs[(at + 12)..(at + 32)]);
+                let addr = H160::from_slice(slice);
 
                 Ok((Value::Address(addr), 32))
             }
 
             Type::Bool => {
                 let at = base_addr + at;
-                let b = U256::from_big_endian(&bs[at..(at + 32)]) == U256::one();
+                let slice = bs
+                    .get(at..(at + 32))
+                    .ok_or_else(|| "reached end of input while decoding bool".to_string())?;
+
+                let b = U256::from_big_endian(slice) == U256::one();
 
                 Ok((Value::Bool(b), 32))
             }
 
             Type::FixedBytes(size) => {
                 let at = base_addr + at;
-                let bv = bs[at..(at + size)].to_vec();
+                let bv = bs
+                    .get(at..(at + size))
+                    .ok_or_else(|| format!("reached end of input while decoding bytes{}", size))?
+                    .to_vec();
 
                 Ok((Value::FixedBytes(bv), Self::padded32_size(*size)))
             }
@@ -225,7 +244,10 @@ impl Value {
                 let (base_addr, at) = if ty.is_dynamic() {
                     // For fixed arrays of types that are dynamic, we just jump
                     // to the offset location and decode from there.
-                    let offset = U256::from_big_endian(&bs[at..(at + 32)]).as_usize();
+                    let slice = bs.get(at..(at + 32)).ok_or_else(|| {
+                        format!("reached end of input while decoding {}[{}]", ty, size)
+                    })?;
+                    let offset = U256::from_big_endian(slice).as_usize();
 
                     (base_addr + offset, 0)
                 } else {
@@ -268,13 +290,23 @@ impl Value {
 
             Type::Bytes => {
                 let at = base_addr + at;
-                let offset = U256::from_big_endian(&bs[at..(at + 32)]).as_usize();
+                let slice = bs.get(at..(at + 32)).ok_or_else(|| {
+                    "reached end of input while decoding bytes offset".to_string()
+                })?;
+                let offset = U256::from_big_endian(slice).as_usize();
 
                 let at = base_addr + offset;
-                let bytes_len = U256::from_big_endian(&bs[at..(at + 32)]).as_usize();
+
+                let slice = bs.get(at..(at + 32)).ok_or_else(|| {
+                    "reached end of input while decoding bytes length".to_string()
+                })?;
+                let bytes_len = U256::from_big_endian(slice).as_usize();
 
                 let at = at + 32;
-                let bytes = bs[at..(at + bytes_len)].to_vec();
+                let bytes = bs
+                    .get(at..(at + bytes_len))
+                    .ok_or_else(|| "reached end of input while decoding bytes".to_string())?
+                    .to_vec();
 
                 // consumes only the first 32 bytes, i.e. the offset pointer
                 Ok((Value::Bytes(bytes), 32))
@@ -282,10 +314,16 @@ impl Value {
 
             Type::Array(ty) => {
                 let at = base_addr + at;
-                let offset = U256::from_big_endian(&bs[at..(at + 32)]).as_usize();
+                let slice = bs.get(at..(at + 32)).ok_or_else(|| {
+                    "reached end of input while decoding array offset".to_string()
+                })?;
+                let offset = U256::from_big_endian(slice).as_usize();
 
                 let at = base_addr + offset;
-                let array_len = U256::from_big_endian(&bs[at..(at + 32)]).as_usize();
+                let slice = bs.get(at..(at + 32)).ok_or_else(|| {
+                    "reached end of input while decoding array length".to_string()
+                })?;
+                let array_len = U256::from_big_endian(slice).as_usize();
 
                 let (arr, _) = Self::decode(bs, &Type::FixedArray(ty.clone(), array_len), at, 32)?;
 
@@ -302,7 +340,10 @@ impl Value {
             Type::Tuple(tys) => {
                 // Tuples follow the same logic as fixed arrays.
                 let (base_addr, at) = if ty.is_dynamic() {
-                    let offset = U256::from_big_endian(&bs[at..(at + 32)]).as_usize();
+                    let slice = bs.get(at..(at + 32)).ok_or_else(|| {
+                        "reached end of input while decoding tuple offset".to_string()
+                    })?;
+                    let offset = U256::from_big_endian(slice).as_usize();
 
                     (base_addr + offset, 0)
                 } else {
