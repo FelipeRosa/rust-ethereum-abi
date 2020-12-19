@@ -4,19 +4,8 @@ _Currently under development._
 
 `ethereum_abi` is a Rust library to help writing code that interacts with Ethereum Smart Contracts.
 
-## Features
-
-### ABI encoder V1
-
-- [x] JSON parsing
-- [x] Function selectors (method ID)
-- [x] argument encoding and decoding
-
-### ABI encoder V2
-
-- [x] JSON parsing
-- [x] Function selectors (method ID)
-- [x] argument encoding and decoding
+[![Crates.io](https://img.shields.io/crates/v/ethereum_abi)](https://crates.io/crates/ethereum_abi)
+[![Docs.rs](https://docs.rs/ethereum_abi/badge.svg)](https://docs.rs/ethereum_abi)
 
 ## Example
 
@@ -51,6 +40,20 @@ fn main() {
     );
 }
 ```
+
+## Features
+
+### ABI encoder V1
+
+- [x] JSON parsing
+- [x] Function selectors (method ID)
+- [x] argument encoding and decoding
+
+### ABI encoder V2
+
+- [x] JSON parsing
+- [x] Function selectors (method ID)
+- [x] argument encoding and decoding
 
 ## License
 
