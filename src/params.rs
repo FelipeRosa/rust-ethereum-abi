@@ -23,27 +23,50 @@ impl From<(Param, Value)> for DecodedParam {
 ///
 /// This struct provides a way for accessing decoded param values by index and by name.
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct DecodedParams {
-    pub index_params: Vec<Rc<DecodedParam>>,
-    pub named_params: HashMap<String, Rc<DecodedParam>>,
+pub struct DecodedParams(Vec<DecodedParam>);
+
+impl DecodedParams {
+    /// Creates a reader.
+    ///
+    /// Parameters are indexed by name at reader creation.
+    pub fn reader(&self) -> DecodedParamsReader {
+        DecodedParamsReader::new(self)
+    }
+}
+
+impl std::ops::Deref for DecodedParams {
+    type Target = Vec<DecodedParam>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl From<Vec<(Param, Value)>> for DecodedParams {
     fn from(values: Vec<(Param, Value)>) -> Self {
-        let index_params: Vec<Rc<DecodedParam>> =
-            values.into_iter().map(From::from).map(Rc::new).collect();
+        Self(values.into_iter().map(From::from).collect())
+    }
+}
 
-        let named_params = index_params
+/// Provides fast read access to decoded params by parameter index and name.
+pub struct DecodedParamsReader<'a> {
+    /// Decoded params by parameter index.
+    pub by_index: Vec<&'a DecodedParam>,
+    /// Decoded params by parameter name.
+    pub by_name: HashMap<&'a str, &'a DecodedParam>,
+}
+
+impl<'a> DecodedParamsReader<'a> {
+    fn new(decoded_params: &'a DecodedParams) -> Self {
+        let by_index = decoded_params.iter().collect();
+
+        let by_name = decoded_params
             .iter()
             .filter(|decoded_param| !decoded_param.param.name.is_empty())
-            .cloned()
-            .map(|decoded_param| (decoded_param.param.name.clone(), decoded_param))
+            .map(|decoded_param| (decoded_param.param.name.as_str(), decoded_param))
             .collect();
 
-        Self {
-            index_params,
-            named_params,
-        }
+        DecodedParamsReader { by_index, by_name }
     }
 }
 
