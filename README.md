@@ -1,11 +1,11 @@
 # Ethereum ABI
 
+[![Crates.io](https://img.shields.io/crates/v/ethereum_abi)](https://crates.io/crates/ethereum_abi)
+[![Docs.rs](https://docs.rs/ethereum_abi/badge.svg)](https://docs.rs/ethereum_abi)
+
 _Currently under development._
 
 `ethereum_abi` is a Rust library to help writing code that interacts with Ethereum Smart Contracts.
-
-[![Crates.io](https://img.shields.io/crates/v/ethereum_abi)](https://crates.io/crates/ethereum_abi)
-[![Docs.rs](https://docs.rs/ethereum_abi/badge.svg)](https://docs.rs/ethereum_abi)
 
 ## Example
 
