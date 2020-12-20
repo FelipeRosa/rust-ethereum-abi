@@ -32,10 +32,7 @@ fn main() {
         .decode_input_from_hex(&encoded_input.trim())
         .expect("failed decoding input");
 
-    println!(
-        "function called: {}\ninput: {:?}",
-        func.name, decoded_input.index_params
-    );
+    println!("function called: {}\ninput: {:?}", func.name, decoded_input);
 }
 ```
 
