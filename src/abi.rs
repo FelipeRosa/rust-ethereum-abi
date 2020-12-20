@@ -1,6 +1,6 @@
 use serde::{de::Visitor, Deserialize};
 
-use crate::{params::Param, DecodedParams, Value};
+use crate::{params::Param, DecodedParams, Event, Value};
 
 /// Contract ABI (Abstract Binary Interface).
 ///
@@ -155,17 +155,6 @@ impl Function {
                 .collect::<Vec<_>>(),
         ))
     }
-}
-
-/// Contract event definition.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Event {
-    /// Event name.
-    pub name: String,
-    /// Event inputs.
-    pub inputs: Vec<Param>,
-    /// Whether the event is anonymous or not.
-    pub anonymous: bool,
 }
 
 /// Available state mutability values for functions and constructors.
