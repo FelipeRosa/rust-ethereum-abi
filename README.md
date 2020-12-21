@@ -5,7 +5,9 @@
 
 `ethereum_abi` is a Rust library to help writing code that interacts with Ethereum Smart Contracts.
 
-## Example
+## Examples
+
+### Decoding function inputs
 
 ```rust
 use std::fs::File;
@@ -33,6 +35,39 @@ fn main() {
         .expect("failed decoding input");
 
     println!("function called: {}\ninput: {:?}", func.name, decoded_input);
+}
+```
+
+### Decoding log data
+
+```rust
+use std::{fs::File, str::FromStr};
+
+use ethereum_abi::Abi;
+use web3::types::H256;
+
+fn main() {
+    // Parse ABI JSON file
+    let abi = {
+        let file = File::open("some_abi.json").expect("failed to open ABI file");
+
+        Abi::from_reader(file).expect("failed to parse ABI")
+    };
+
+    // Log data
+    let topics = vec![
+        H256::from_str("...").unwrap(),
+        H256::from_str("...").unwrap(),
+    ];
+
+    let data = "0000000...".as_bytes();
+
+    // Decode
+    let (evt, decoded_data) = abi
+        .decode_log_from_slice(&topics, data)
+        .expect("failed decoding log");
+
+    println!("event: {}\ndata: {:?}", evt.name, decoded_data);
 }
 ```
 
