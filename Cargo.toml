@@ -1,6 +1,6 @@
 [package]
 name = "ethereum_abi"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Felipe Rosa <felipe.sgrosa@gmail.com>"]
 edition = "2018"
 description = "Ethereum Smart Contract ABI parsing library"
