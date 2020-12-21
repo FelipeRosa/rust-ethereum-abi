@@ -1,3 +1,4 @@
+use ethereum_types::H256;
 use serde::{de::Visitor, Deserialize};
 
 use crate::{params::Param, DecodedParams, Event, Value};
@@ -67,6 +68,27 @@ impl Abi {
         let slice = hex::decode(input).map_err(|err| err.to_string())?;
 
         self.decode_input_from_slice(&slice)
+    }
+
+    /// Decode event data from slice.
+    pub fn decode_log_from_slice<'a>(
+        &'a self,
+        topics: &[H256],
+        data: &[u8],
+    ) -> Result<(&'a Event, DecodedParams), String> {
+        if topics.len() == 0 {
+            return Err("missing event topic id".to_string());
+        }
+
+        let e = self
+            .events
+            .iter()
+            .find(|e| e.topic() == topics[0])
+            .ok_or_else(|| "ABI event not found".to_string())?;
+
+        let decoded_params = e.decode_data_from_slice(topics, data)?;
+
+        Ok((&e, decoded_params))
     }
 }
 
