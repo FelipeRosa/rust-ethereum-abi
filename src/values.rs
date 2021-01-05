@@ -412,7 +412,7 @@ mod test {
         let mut bs = [0u8; 32];
         uint.to_big_endian(&mut bs[..]);
 
-        let v = Value::decode_from_slice(&bs, &vec![Type::Uint(256)]);
+        let v = Value::decode_from_slice(&bs, &[Type::Uint(256)]);
 
         assert_eq!(v, Ok(vec![Value::Uint(uint, 256)]));
     }
@@ -424,7 +424,7 @@ mod test {
         let mut bs = [0u8; 32];
         uint.to_big_endian(&mut bs[..]);
 
-        let v = Value::decode_from_slice(&bs, &vec![Type::Int(256)]);
+        let v = Value::decode_from_slice(&bs, &[Type::Int(256)]);
 
         assert_eq!(v, Ok(vec![Value::Int(uint, 256)]));
     }
@@ -434,9 +434,9 @@ mod test {
         let addr = H160::random();
 
         let mut bs = [0u8; 32];
-        &bs[12..32].copy_from_slice(addr.as_bytes());
+        bs[12..32].copy_from_slice(addr.as_bytes());
 
-        let v = Value::decode_from_slice(&bs, &vec![Type::Address]);
+        let v = Value::decode_from_slice(&bs, &[Type::Address]);
 
         assert_eq!(v, Ok(vec![Value::Address(addr)]));
     }
@@ -446,7 +446,7 @@ mod test {
         let mut bs = [0u8; 32];
         bs[31] = 1;
 
-        let v = Value::decode_from_slice(&bs, &vec![Type::Bool]);
+        let v = Value::decode_from_slice(&bs, &[Type::Bool]);
 
         assert_eq!(v, Ok(vec![Value::Bool(true)]));
     }
@@ -454,11 +454,11 @@ mod test {
     #[test]
     fn decode_fixed_bytes() {
         let mut bs = [0u8; 32];
-        for i in 1..16 {
-            bs[i] = i as u8;
+        for (i, b) in bs.iter_mut().enumerate().take(16).skip(1) {
+            *b = i as u8;
         }
 
-        let v = Value::decode_from_slice(&bs, &vec![Type::FixedBytes(16)]);
+        let v = Value::decode_from_slice(&bs, &[Type::FixedBytes(16)]);
 
         assert_eq!(v, Ok(vec![Value::FixedBytes(bs[0..16].to_vec())]));
     }
@@ -480,8 +480,7 @@ mod test {
 
         let uint_arr2 = Type::FixedArray(Box::new(Type::Uint(256)), 2);
 
-        let v =
-            Value::decode_from_slice(&bs, &vec![Type::FixedArray(Box::new(uint_arr2.clone()), 2)]);
+        let v = Value::decode_from_slice(&bs, &[Type::FixedArray(Box::new(uint_arr2.clone()), 2)]);
 
         assert_eq!(
             v,
@@ -518,7 +517,7 @@ mod test {
             bs[64 + i] = chars[rng.gen_range(0, chars.len())];
         }
 
-        let v = Value::decode_from_slice(&bs, &vec![Type::String]);
+        let v = Value::decode_from_slice(&bs, &[Type::String]);
 
         let expected_str = String::from_utf8(bs[64..(64 + str_len)].to_vec()).unwrap();
         assert_eq!(v, Ok(vec![Value::String(expected_str)]));
@@ -538,7 +537,7 @@ mod test {
             bs[64 + i] = rng.gen();
         }
 
-        let v = Value::decode_from_slice(&bs, &vec![Type::Bytes]);
+        let v = Value::decode_from_slice(&bs, &[Type::Bytes]);
 
         assert_eq!(v, Ok(vec![Value::Bytes(bs[64..(64 + bytes_len)].to_vec())]));
     }
@@ -562,7 +561,7 @@ mod test {
 
         let uint_arr2 = Type::FixedArray(Box::new(Type::Uint(256)), 2);
 
-        let v = Value::decode_from_slice(&bs, &vec![Type::Array(Box::new(uint_arr2.clone()))]);
+        let v = Value::decode_from_slice(&bs, &[Type::Array(Box::new(uint_arr2.clone()))]);
 
         assert_eq!(
             v,
@@ -597,7 +596,7 @@ mod test {
 
         let v = Value::decode_from_slice(
             &bs,
-            &vec![Type::Tuple(vec![
+            &[Type::Tuple(vec![
                 ("a".to_string(), Type::Uint(256)),
                 ("b".to_string(), Type::Uint(256)),
                 ("c".to_string(), Type::Address),
@@ -632,7 +631,7 @@ mod test {
 
         let v = Value::decode_from_slice(
             &bs,
-            &vec![Type::Tuple(vec![
+            &[Type::Tuple(vec![
                 ("a".to_string(), Type::Uint(256)),
                 ("b".to_string(), Type::String),
                 ("c".to_string(), Type::Address),
@@ -696,7 +695,7 @@ mod test {
         expected_bytes[30] = 0xcd;
         expected_bytes[29] = 0xef;
 
-        assert_eq!(Value::encode(&vec![value]), expected_bytes);
+        assert_eq!(Value::encode(&[value]), expected_bytes);
     }
 
     #[test]
@@ -708,7 +707,7 @@ mod test {
         expected_bytes[30] = 0xcd;
         expected_bytes[29] = 0xab;
 
-        assert_eq!(Value::encode(&vec![value]), expected_bytes);
+        assert_eq!(Value::encode(&[value]), expected_bytes);
     }
 
     #[test]
@@ -719,7 +718,7 @@ mod test {
         let mut expected_bytes = [0u8; 32].to_vec();
         expected_bytes[12..32].copy_from_slice(addr.as_fixed_bytes());
 
-        assert_eq!(Value::encode(&vec![value]), expected_bytes);
+        assert_eq!(Value::encode(&[value]), expected_bytes);
     }
 
     #[test]
@@ -729,19 +728,19 @@ mod test {
 
         let false_vec = [0u8; 32].to_vec();
 
-        assert_eq!(Value::encode(&vec![Value::Bool(true)]), true_vec);
-        assert_eq!(Value::encode(&vec![Value::Bool(false)]), false_vec);
+        assert_eq!(Value::encode(&[Value::Bool(true)]), true_vec);
+        assert_eq!(Value::encode(&[Value::Bool(false)]), false_vec);
     }
 
     #[test]
     fn encode_fixed_bytes() {
         let mut bytes = [0u8; 32].to_vec();
-        for i in 0..16 {
-            bytes[i] = i as u8;
+        for (i, b) in bytes.iter_mut().enumerate().take(16).skip(1) {
+            *b = i as u8;
         }
 
         assert_eq!(
-            Value::encode(&vec![Value::FixedBytes(bytes[0..16].to_vec())]),
+            Value::encode(&[Value::FixedBytes(bytes[0..16].to_vec())]),
             bytes
         );
     }
@@ -760,7 +759,7 @@ mod test {
         uint1.to_big_endian(&mut expected_bytes[0..32]);
         uint2.to_big_endian(&mut expected_bytes[32..64]);
 
-        assert_eq!(Value::encode(&vec![value]), expected_bytes);
+        assert_eq!(Value::encode(&[value]), expected_bytes);
     }
 
     #[test]
@@ -779,7 +778,7 @@ mod test {
         expected_bytes[62] = 0x0b;
         expected_bytes[64..(64 + 2890)].copy_from_slice(s.as_bytes());
 
-        assert_eq!(Value::encode(&vec![Value::String(s)]), expected_bytes);
+        assert_eq!(Value::encode(&[Value::String(s)]), expected_bytes);
     }
 
     #[test]
@@ -798,7 +797,7 @@ mod test {
         expected_bytes[76..96].copy_from_slice(addr1.as_fixed_bytes());
         expected_bytes[108..128].copy_from_slice(addr2.as_fixed_bytes());
 
-        assert_eq!(Value::encode(&vec![value]), expected_bytes);
+        assert_eq!(Value::encode(&[value]), expected_bytes);
     }
 
     #[test]
@@ -815,7 +814,7 @@ mod test {
         expected_bytes[12..32].copy_from_slice(addr.as_fixed_bytes());
         uint.to_big_endian(&mut expected_bytes[32..64]);
 
-        assert_eq!(Value::encode(&vec![value]), expected_bytes);
+        assert_eq!(Value::encode(&[value]), expected_bytes);
     }
 
     #[test]
@@ -835,7 +834,7 @@ mod test {
         expected_bytes[127] = 3; // big-endian string length
         expected_bytes[128..(128 + s.len())].copy_from_slice(s.as_bytes());
 
-        assert_eq!(Value::encode(&vec![value]), expected_bytes);
+        assert_eq!(Value::encode(&[value]), expected_bytes);
     }
 
     #[test]
