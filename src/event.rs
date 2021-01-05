@@ -1,6 +1,6 @@
-use std::collections::VecDeque;
-
+use anyhow::{anyhow, Result};
 use ethereum_types::H256;
+use std::collections::VecDeque;
 
 use crate::{DecodedParams, Param, Type, Value};
 
@@ -46,14 +46,14 @@ impl Event {
         &self,
         mut topics: &[H256],
         data: &[u8],
-    ) -> Result<DecodedParams, String> {
+    ) -> Result<DecodedParams> {
         // strip event topic from the topics array
         // so that we end up with only the values we
         // need to decode
         if !self.anonymous {
             topics = topics
                 .get(1..)
-                .ok_or_else(|| "missing event topic".to_string())?;
+                .ok_or_else(|| anyhow!("missing event topic"))?;
         }
 
         let mut topics_values: VecDeque<_> = VecDeque::from(topics.to_vec());
@@ -73,7 +73,7 @@ impl Event {
             let decoded_value = if input.indexed.unwrap_or(false) {
                 let val = topics_values
                     .pop_front()
-                    .ok_or_else(|| "insufficient topics entries".to_string())?;
+                    .ok_or_else(|| anyhow!("insufficient topics entries"))?;
 
                 let bytes = val.to_fixed_bytes().to_vec();
 
@@ -82,13 +82,13 @@ impl Event {
                 } else {
                     Value::decode_from_slice(&bytes, &[input.type_.clone()])?
                         .first()
-                        .ok_or_else(|| "no value decoded from topics entry".to_string())
+                        .ok_or_else(|| anyhow!("no value decoded from topics entry"))
                         .map(Clone::clone)
                 }
             } else {
                 data_values
                     .pop_front()
-                    .ok_or_else(|| "insuficient data values".to_string())
+                    .ok_or_else(|| anyhow!("insuficient data values"))
             };
 
             decoded.push((input, decoded_value?));
@@ -211,8 +211,9 @@ mod test {
         };
 
         assert_eq!(
-            abi.decode_log_from_slice(&topics, &data),
-            Ok((
+            abi.decode_log_from_slice(&topics, &data)
+                .expect("decode_log_from_slice failed"),
+            (
                 &abi.events[0],
                 DecodedParams::from(vec![
                     (x, Value::Uint(U256::from(1), 256)),
@@ -221,7 +222,7 @@ mod test {
                     (y1, Value::Uint(U256::from(11), 256)),
                     (s, Value::String("abc".to_string()))
                 ])
-            ))
+            )
         );
     }
 }
