@@ -76,7 +76,7 @@ impl Abi {
         topics: &[H256],
         data: &[u8],
     ) -> Result<(&'a Event, DecodedParams), String> {
-        if topics.len() == 0 {
+        if topics.is_empty() {
             return Err("missing event topic id".to_string());
         }
 

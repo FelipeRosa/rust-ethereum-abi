@@ -80,7 +80,7 @@ impl Event {
                 if Self::is_encoded_to_keccak(&input.type_) {
                     Ok(Value::FixedBytes(bytes))
                 } else {
-                    Value::decode_from_slice(&bytes, &vec![input.type_.clone()])?
+                    Value::decode_from_slice(&bytes, &[input.type_.clone()])?
                         .first()
                         .ok_or_else(|| "no value decoded from topics entry".to_string())
                         .map(Clone::clone)
@@ -98,15 +98,14 @@ impl Event {
     }
 
     fn is_encoded_to_keccak(ty: &Type) -> bool {
-        match ty {
+        matches!(
+            ty,
             Type::FixedArray(_, _)
             | Type::Array(_)
             | Type::Bytes
             | Type::String
-            | Type::Tuple(_) => true,
-
-            _ => false,
-        }
+            | Type::Tuple(_)
+        )
     }
 }
 
