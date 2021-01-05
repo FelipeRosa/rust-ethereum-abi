@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Error, Result};
 use ethereum_types::H256;
 use serde::{de::Visitor, Deserialize};
 
@@ -35,11 +36,11 @@ pub struct Abi {
 
 impl Abi {
     /// Parses a JSON ABI definition from a reader (e.g. a file handle).
-    pub fn from_reader<R>(rdr: R) -> Result<Abi, String>
+    pub fn from_reader<R>(rdr: R) -> Result<Abi>
     where
         R: std::io::Read,
     {
-        serde_json::from_reader(rdr).map_err(|e| e.to_string())
+        Ok(serde_json::from_reader(rdr)?)
     }
 }
 
@@ -48,12 +49,12 @@ impl Abi {
     pub fn decode_input_from_slice<'a>(
         &'a self,
         input: &[u8],
-    ) -> Result<(&'a Function, DecodedParams), String> {
+    ) -> Result<(&'a Function, DecodedParams)> {
         let f = self
             .functions
             .iter()
             .find(|f| f.method_id() == input[0..4])
-            .ok_or_else(|| "ABI function not found".to_string())?;
+            .ok_or_else(|| anyhow!("ABI function not found"))?;
 
         let decoded_params = f.decode_input_from_slice(&input[4..])?;
 
@@ -64,8 +65,8 @@ impl Abi {
     pub fn decode_input_from_hex<'a>(
         &'a self,
         input: &str,
-    ) -> Result<(&'a Function, DecodedParams), String> {
-        let slice = hex::decode(input).map_err(|err| err.to_string())?;
+    ) -> Result<(&'a Function, DecodedParams)> {
+        let slice = hex::decode(input)?;
 
         self.decode_input_from_slice(&slice)
     }
@@ -75,16 +76,16 @@ impl Abi {
         &'a self,
         topics: &[H256],
         data: &[u8],
-    ) -> Result<(&'a Event, DecodedParams), String> {
+    ) -> Result<(&'a Event, DecodedParams)> {
         if topics.is_empty() {
-            return Err("missing event topic id".to_string());
+            return Err(anyhow!("missing event topic id"));
         }
 
         let e = self
             .events
             .iter()
             .find(|e| e.topic() == topics[0])
-            .ok_or_else(|| "ABI event not found".to_string())?;
+            .ok_or_else(|| anyhow!("ABI event not found"))?;
 
         let decoded_params = e.decode_data_from_slice(topics, data)?;
 
@@ -93,11 +94,11 @@ impl Abi {
 }
 
 impl std::str::FromStr for Abi {
-    type Err = String;
+    type Err = Error;
 
     /// Parses a JSON ABI definition from a string.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        serde_json::from_str(s).map_err(|e| e.to_string())
+        Ok(serde_json::from_str(s)?)
     }
 }
 
@@ -162,7 +163,7 @@ impl Function {
     }
 
     // Decode function input from slice.
-    pub fn decode_input_from_slice(&self, input: &[u8]) -> Result<DecodedParams, String> {
+    pub fn decode_input_from_slice(&self, input: &[u8]) -> Result<DecodedParams> {
         let inputs_types = self
             .inputs
             .iter()
@@ -374,7 +375,9 @@ mod test {
         let mut enc_input = abi.functions[0].method_id().to_vec();
         enc_input.extend(Value::encode(&input_values));
 
-        let dec = abi.decode_input_from_slice(&enc_input);
+        let dec = abi
+            .decode_input_from_slice(&enc_input)
+            .expect("decode_input_from_slice failed");
 
         let expected_decoded_params = DecodedParams::from(
             abi.functions[0]
@@ -385,7 +388,7 @@ mod test {
                 .collect::<Vec<(Param, Value)>>(),
         );
 
-        assert_eq!(dec, Ok((&abi.functions[0], expected_decoded_params)));
+        assert_eq!(dec, (&abi.functions[0], expected_decoded_params));
     }
 
     #[test]

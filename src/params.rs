@@ -1,6 +1,5 @@
-use std::{collections::HashMap, rc::Rc};
-
 use serde::Deserialize;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{types::Type, Value};
 

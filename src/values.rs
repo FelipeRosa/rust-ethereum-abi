@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result};
 use ethereum_types::{H160, U256};
 
 use crate::types::Type;
@@ -31,7 +32,7 @@ pub enum Value {
 
 impl Value {
     /// Decodes values from bytes using the given type hint.
-    pub fn decode_from_slice(bs: &[u8], tys: &[Type]) -> Result<Vec<Value>, String> {
+    pub fn decode_from_slice(bs: &[u8], tys: &[Type]) -> Result<Vec<Value>> {
         tys.iter()
             .try_fold((vec![], 0), |(mut values, at), ty| {
                 let (value, consumed) = Self::decode(bs, ty, 0, at)?;
@@ -183,13 +184,13 @@ impl Value {
         }
     }
 
-    fn decode(bs: &[u8], ty: &Type, base_addr: usize, at: usize) -> Result<(Value, usize), String> {
+    fn decode(bs: &[u8], ty: &Type, base_addr: usize, at: usize) -> Result<(Value, usize)> {
         match ty {
             Type::Uint(size) => {
                 let at = base_addr + at;
                 let slice = bs
                     .get(at..(at + 32))
-                    .ok_or_else(|| format!("reached end of input while decoding uint{}", size))?;
+                    .ok_or_else(|| anyhow!("reached end of input while decoding uint{}", size))?;
 
                 let uint = U256::from_big_endian(slice);
 
@@ -200,7 +201,7 @@ impl Value {
                 let at = base_addr + at;
                 let slice = bs
                     .get(at..(at + 32))
-                    .ok_or_else(|| format!("reached end of input while decoding int{}", size))?;
+                    .ok_or_else(|| anyhow!("reached end of input while decoding int{}", size))?;
 
                 let uint = U256::from_big_endian(slice);
 
@@ -211,7 +212,7 @@ impl Value {
                 let at = base_addr + at;
                 let slice = bs
                     .get((at + 12)..(at + 32))
-                    .ok_or_else(|| "reached end of input while decoding address".to_string())?;
+                    .ok_or_else(|| anyhow!("reached end of input while decoding address"))?;
 
                 // big-endian, same as if it were a uint160.
                 let addr = H160::from_slice(slice);
@@ -223,7 +224,7 @@ impl Value {
                 let at = base_addr + at;
                 let slice = bs
                     .get(at..(at + 32))
-                    .ok_or_else(|| "reached end of input while decoding bool".to_string())?;
+                    .ok_or_else(|| anyhow!("reached end of input while decoding bool"))?;
 
                 let b = U256::from_big_endian(slice) == U256::one();
 
@@ -234,7 +235,7 @@ impl Value {
                 let at = base_addr + at;
                 let bv = bs
                     .get(at..(at + size))
-                    .ok_or_else(|| format!("reached end of input while decoding bytes{}", size))?
+                    .ok_or_else(|| anyhow!("reached end of input while decoding bytes{}", size))?
                     .to_vec();
 
                 Ok((Value::FixedBytes(bv), Self::padded32_size(*size)))
@@ -245,7 +246,7 @@ impl Value {
                     // For fixed arrays of types that are dynamic, we just jump
                     // to the offset location and decode from there.
                     let slice = bs.get(at..(at + 32)).ok_or_else(|| {
-                        format!("reached end of input while decoding {}[{}]", ty, size)
+                        anyhow!("reached end of input while decoding {}[{}]", ty, size)
                     })?;
                     let offset = U256::from_big_endian(slice).as_usize();
 
@@ -283,29 +284,29 @@ impl Value {
                     unreachable!();
                 };
 
-                let s = String::from_utf8(bytes).map_err(|e| e.to_string())?;
+                let s = String::from_utf8(bytes)?;
 
                 Ok((Value::String(s), consumed))
             }
 
             Type::Bytes => {
                 let at = base_addr + at;
-                let slice = bs.get(at..(at + 32)).ok_or_else(|| {
-                    "reached end of input while decoding bytes offset".to_string()
-                })?;
+                let slice = bs
+                    .get(at..(at + 32))
+                    .ok_or_else(|| anyhow!("reached end of input while decoding bytes offset"))?;
                 let offset = U256::from_big_endian(slice).as_usize();
 
                 let at = base_addr + offset;
 
-                let slice = bs.get(at..(at + 32)).ok_or_else(|| {
-                    "reached end of input while decoding bytes length".to_string()
-                })?;
+                let slice = bs
+                    .get(at..(at + 32))
+                    .ok_or_else(|| anyhow!("reached end of input while decoding bytes length"))?;
                 let bytes_len = U256::from_big_endian(slice).as_usize();
 
                 let at = at + 32;
                 let bytes = bs
                     .get(at..(at + bytes_len))
-                    .ok_or_else(|| "reached end of input while decoding bytes".to_string())?
+                    .ok_or_else(|| anyhow!("reached end of input while decoding bytes"))?
                     .to_vec();
 
                 // consumes only the first 32 bytes, i.e. the offset pointer
@@ -314,15 +315,15 @@ impl Value {
 
             Type::Array(ty) => {
                 let at = base_addr + at;
-                let slice = bs.get(at..(at + 32)).ok_or_else(|| {
-                    "reached end of input while decoding array offset".to_string()
-                })?;
+                let slice = bs
+                    .get(at..(at + 32))
+                    .ok_or_else(|| anyhow!("reached end of input while decoding array offset"))?;
                 let offset = U256::from_big_endian(slice).as_usize();
 
                 let at = base_addr + offset;
-                let slice = bs.get(at..(at + 32)).ok_or_else(|| {
-                    "reached end of input while decoding array length".to_string()
-                })?;
+                let slice = bs
+                    .get(at..(at + 32))
+                    .ok_or_else(|| anyhow!("reached end of input while decoding array length"))?;
                 let array_len = U256::from_big_endian(slice).as_usize();
 
                 let (arr, _) = Self::decode(bs, &Type::FixedArray(ty.clone(), array_len), at, 32)?;
@@ -341,7 +342,7 @@ impl Value {
                 // Tuples follow the same logic as fixed arrays.
                 let (base_addr, at) = if ty.is_dynamic() {
                     let slice = bs.get(at..(at + 32)).ok_or_else(|| {
-                        "reached end of input while decoding tuple offset".to_string()
+                        anyhow!("reached end of input while decoding tuple offset")
                     })?;
                     let offset = U256::from_big_endian(slice).as_usize();
 
@@ -412,9 +413,10 @@ mod test {
         let mut bs = [0u8; 32];
         uint.to_big_endian(&mut bs[..]);
 
-        let v = Value::decode_from_slice(&bs, &[Type::Uint(256)]);
+        let v =
+            Value::decode_from_slice(&bs, &[Type::Uint(256)]).expect("decode_from_slice failed");
 
-        assert_eq!(v, Ok(vec![Value::Uint(uint, 256)]));
+        assert_eq!(v, vec![Value::Uint(uint, 256)]);
     }
 
     #[test]
@@ -424,9 +426,9 @@ mod test {
         let mut bs = [0u8; 32];
         uint.to_big_endian(&mut bs[..]);
 
-        let v = Value::decode_from_slice(&bs, &[Type::Int(256)]);
+        let v = Value::decode_from_slice(&bs, &[Type::Int(256)]).expect("decode_from_slice failed");
 
-        assert_eq!(v, Ok(vec![Value::Int(uint, 256)]));
+        assert_eq!(v, vec![Value::Int(uint, 256)]);
     }
 
     #[test]
@@ -436,9 +438,9 @@ mod test {
         let mut bs = [0u8; 32];
         bs[12..32].copy_from_slice(addr.as_bytes());
 
-        let v = Value::decode_from_slice(&bs, &[Type::Address]);
+        let v = Value::decode_from_slice(&bs, &[Type::Address]).expect("decode_from_slice failed");
 
-        assert_eq!(v, Ok(vec![Value::Address(addr)]));
+        assert_eq!(v, vec![Value::Address(addr)]);
     }
 
     #[test]
@@ -446,9 +448,9 @@ mod test {
         let mut bs = [0u8; 32];
         bs[31] = 1;
 
-        let v = Value::decode_from_slice(&bs, &[Type::Bool]);
+        let v = Value::decode_from_slice(&bs, &[Type::Bool]).expect("decode_from_slice failed");
 
-        assert_eq!(v, Ok(vec![Value::Bool(true)]));
+        assert_eq!(v, vec![Value::Bool(true)]);
     }
 
     #[test]
@@ -458,9 +460,10 @@ mod test {
             *b = i as u8;
         }
 
-        let v = Value::decode_from_slice(&bs, &[Type::FixedBytes(16)]);
+        let v = Value::decode_from_slice(&bs, &[Type::FixedBytes(16)])
+            .expect("decode_from_slice failed");
 
-        assert_eq!(v, Ok(vec![Value::FixedBytes(bs[0..16].to_vec())]));
+        assert_eq!(v, vec![Value::FixedBytes(bs[0..16].to_vec())]);
     }
 
     #[test]
@@ -480,11 +483,12 @@ mod test {
 
         let uint_arr2 = Type::FixedArray(Box::new(Type::Uint(256)), 2);
 
-        let v = Value::decode_from_slice(&bs, &[Type::FixedArray(Box::new(uint_arr2.clone()), 2)]);
+        let v = Value::decode_from_slice(&bs, &[Type::FixedArray(Box::new(uint_arr2.clone()), 2)])
+            .expect("decode_from_slice failed");
 
         assert_eq!(
             v,
-            Ok(vec![Value::FixedArray(
+            vec![Value::FixedArray(
                 vec![
                     Value::FixedArray(
                         vec![Value::Uint(uint1, 256), Value::Uint(uint2, 256)],
@@ -496,7 +500,7 @@ mod test {
                     )
                 ],
                 uint_arr2
-            )])
+            )]
         );
     }
 
@@ -517,10 +521,10 @@ mod test {
             bs[64 + i] = chars[rng.gen_range(0..chars.len())];
         }
 
-        let v = Value::decode_from_slice(&bs, &[Type::String]);
+        let v = Value::decode_from_slice(&bs, &[Type::String]).expect("decode_from_slice failed");
 
         let expected_str = String::from_utf8(bs[64..(64 + str_len)].to_vec()).unwrap();
-        assert_eq!(v, Ok(vec![Value::String(expected_str)]));
+        assert_eq!(v, vec![Value::String(expected_str)]);
     }
 
     #[test]
@@ -537,9 +541,9 @@ mod test {
             bs[64 + i] = rng.gen();
         }
 
-        let v = Value::decode_from_slice(&bs, &[Type::Bytes]);
+        let v = Value::decode_from_slice(&bs, &[Type::Bytes]).expect("decode_from_slice failed");
 
-        assert_eq!(v, Ok(vec![Value::Bytes(bs[64..(64 + bytes_len)].to_vec())]));
+        assert_eq!(v, vec![Value::Bytes(bs[64..(64 + bytes_len)].to_vec())]);
     }
 
     #[test]
@@ -561,11 +565,12 @@ mod test {
 
         let uint_arr2 = Type::FixedArray(Box::new(Type::Uint(256)), 2);
 
-        let v = Value::decode_from_slice(&bs, &[Type::Array(Box::new(uint_arr2.clone()))]);
+        let v = Value::decode_from_slice(&bs, &[Type::Array(Box::new(uint_arr2.clone()))])
+            .expect("decode_from_slice failed");
 
         assert_eq!(
             v,
-            Ok(vec![Value::Array(
+            vec![Value::Array(
                 vec![
                     Value::FixedArray(
                         vec![Value::Uint(uint1, 256), Value::Uint(uint2, 256)],
@@ -577,7 +582,7 @@ mod test {
                     )
                 ],
                 uint_arr2
-            )])
+            )]
         );
     }
 
@@ -601,15 +606,16 @@ mod test {
                 ("b".to_string(), Type::Uint(256)),
                 ("c".to_string(), Type::Address),
             ])],
-        );
+        )
+        .expect("decode_from_slice failed");
 
         assert_eq!(
             v,
-            Ok(vec![Value::Tuple(vec![
+            vec![Value::Tuple(vec![
                 ("a".to_string(), Value::Uint(uint1, 256)),
                 ("b".to_string(), Value::Uint(uint2, 256)),
                 ("c".to_string(), Value::Address(addr))
-            ])])
+            ])]
         );
     }
 
@@ -636,15 +642,16 @@ mod test {
                 ("b".to_string(), Type::String),
                 ("c".to_string(), Type::Address),
             ])],
-        );
+        )
+        .expect("decode_from_slice failed");
 
         assert_eq!(
             v,
-            Ok(vec![Value::Tuple(vec![
+            vec![Value::Tuple(vec![
                 ("a".to_string(), Value::Uint(uint1, 256)),
                 ("b".to_string(), Value::String(s)),
                 ("c".to_string(), Value::Address(addr))
-            ])])
+            ])]
         );
     }
 
@@ -662,11 +669,11 @@ mod test {
         let mut bs = [0u8; 384];
         hex::decode_to_slice(input, &mut bs).unwrap();
 
-        let v = Value::decode_from_slice(&bs, &tys);
+        let v = Value::decode_from_slice(&bs, &tys).expect("decode_from_slice failed");
 
         assert_eq!(
             v,
-            Ok(vec![
+            vec![
                 Value::String("abc".to_string()),
                 Value::Uint(U256::from(5), 32),
                 Value::FixedArray(
@@ -682,7 +689,7 @@ mod test {
                     ],
                     Type::Array(Box::new(Type::Uint(32)))
                 ),
-            ]),
+            ],
         );
     }
 
