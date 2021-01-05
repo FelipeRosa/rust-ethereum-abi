@@ -508,13 +508,13 @@ mod test {
 
         bs[31] = 0x20; // big-endian string offset
 
-        let str_len: usize = rng.gen_range(0, 64);
+        let str_len: usize = rng.gen_range(0..64);
         bs[63] = str_len as u8; // big-endian string size
 
         let chars = "abcdef0123456789".as_bytes();
 
         for i in 0..(str_len as usize) {
-            bs[64 + i] = chars[rng.gen_range(0, chars.len())];
+            bs[64 + i] = chars[rng.gen_range(0..chars.len())];
         }
 
         let v = Value::decode_from_slice(&bs, &[Type::String]);
@@ -530,7 +530,7 @@ mod test {
         let mut bs = [0u8; 128];
         bs[31] = 0x20; // big-endian bytes offset
 
-        let bytes_len: usize = rng.gen_range(0, 64);
+        let bytes_len: usize = rng.gen_range(0..64);
         bs[63] = bytes_len as u8; // big-endian bytes length
 
         for i in 0..(bytes_len as usize) {
