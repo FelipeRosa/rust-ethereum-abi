@@ -2,6 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/ethereum_abi)](https://crates.io/crates/ethereum_abi)
 [![Docs.rs](https://docs.rs/ethereum_abi/badge.svg)](https://docs.rs/ethereum_abi)
+[![codecov](https://codecov.io/gh/FelipeRosa/rust-ethereum-abi/branch/main/graph/badge.svg?token=48MOFXOP1S)](https://codecov.io/gh/FelipeRosa/rust-ethereum-abi)
 
 `ethereum_abi` is a Rust library to help writing code that interacts with Ethereum Smart Contracts.
 
