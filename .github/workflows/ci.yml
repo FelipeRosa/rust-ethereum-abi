@@ -48,3 +48,20 @@ jobs:
         run: rustup component add clippy
       - name: Run Clippy
         run: cargo clippy --all --tests
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Rust
+        run: rustup update stable
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+      - name: Run cargo-tarpaulin
+        run: cargo tarpaulin --all-features --verbose --workspace --out Xml
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
