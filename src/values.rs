@@ -153,10 +153,7 @@ impl Value {
                     buf.extend(bytes);
                 }
 
-                _ => panic!(format!(
-                    "value of fixed size type {:?} in dynamic alloc area",
-                    value
-                )),
+                _ => panic!("value of fixed size type {:?} in dynamic alloc area", value),
             };
         }
 

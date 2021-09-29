@@ -111,9 +111,7 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::{char, digit1},
-    combinator::opt,
-    combinator::{map_res, recognize, verify},
-    exact,
+    combinator::{all_consuming, map_res, opt, recognize, verify},
     multi::many1,
     sequence::delimited,
     IResult,
@@ -151,7 +149,7 @@ fn parse_exact_type(
     components: Rc<Option<Vec<ParamEntry>>>,
     input: &str,
 ) -> TypeParseResult<&str, Type> {
-    exact!(input, parse_type(components.clone()))
+    all_consuming(parse_type(components.clone()))(input)
 }
 
 fn parse_type(
