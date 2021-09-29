@@ -78,7 +78,7 @@ impl Value {
                     let start = buf.len();
                     buf.resize(buf.len() + 32, 0);
 
-                    buf[start..(start + bytes.len())].copy_from_slice(&bytes);
+                    buf[start..(start + bytes.len())].copy_from_slice(bytes);
                 }
 
                 Value::FixedArray(values, _) => {

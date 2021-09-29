@@ -149,7 +149,7 @@ fn parse_exact_type(
     components: Rc<Option<Vec<ParamEntry>>>,
     input: &str,
 ) -> TypeParseResult<&str, Type> {
-    all_consuming(parse_type(components.clone()))(input)
+    all_consuming(parse_type(components))(input)
 }
 
 fn parse_type(
@@ -245,10 +245,7 @@ fn parse_tuple(
                 .clone()
                 .into_iter()
                 .try_fold(vec![], |mut param_tys, param| {
-                    let comps = match param.components.as_ref() {
-                        Some(comps) => Some(comps.clone()),
-                        None => None,
-                    };
+                    let comps = param.components.as_ref().cloned();
 
                     let ty = match parse_exact_type(Rc::new(comps), &param.type_) {
                         Ok((_, ty)) => ty,
