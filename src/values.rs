@@ -78,7 +78,7 @@ impl Value {
                     let start = buf.len();
                     buf.resize(buf.len() + 32, 0);
 
-                    buf[start..(start + bytes.len())].copy_from_slice(&bytes);
+                    buf[start..(start + bytes.len())].copy_from_slice(bytes);
                 }
 
                 Value::FixedArray(values, _) => {
@@ -153,10 +153,7 @@ impl Value {
                     buf.extend(bytes);
                 }
 
-                _ => panic!(format!(
-                    "value of fixed size type {:?} in dynamic alloc area",
-                    value
-                )),
+                _ => panic!("value of fixed size type {:?} in dynamic alloc area", value),
             };
         }
 

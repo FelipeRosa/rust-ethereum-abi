@@ -58,7 +58,7 @@ impl Abi {
 
         let decoded_params = f.decode_input_from_slice(&input[4..])?;
 
-        Ok((&f, decoded_params))
+        Ok((f, decoded_params))
     }
 
     // Decode function input from hex string.
@@ -89,7 +89,7 @@ impl Abi {
 
         let decoded_params = e.decode_data_from_slice(topics, data)?;
 
-        Ok((&e, decoded_params))
+        Ok((e, decoded_params))
     }
 }
 

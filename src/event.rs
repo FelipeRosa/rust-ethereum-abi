@@ -100,11 +100,7 @@ impl Event {
     fn is_encoded_to_keccak(ty: &Type) -> bool {
         matches!(
             ty,
-            Type::FixedArray(_, _)
-            | Type::Array(_)
-            | Type::Bytes
-            | Type::String
-            | Type::Tuple(_)
+            Type::FixedArray(_, _) | Type::Array(_) | Type::Bytes | Type::String | Type::Tuple(_)
         )
     }
 }
