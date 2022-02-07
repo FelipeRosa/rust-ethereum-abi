@@ -12,7 +12,7 @@ keywords = ["abi", "ethereum", "solidity", "web3"]
 
 [dependencies]
 anyhow = "1.0"
-ethereum-types = "0.12"
+ethereum-types = "0.13"
 hex = "0.4"
 nom = "7.0"
 regex = "1.4"
