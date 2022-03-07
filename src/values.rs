@@ -323,7 +323,7 @@ impl Value {
                     .ok_or_else(|| anyhow!("reached end of input while decoding array length"))?;
                 let array_len = U256::from_big_endian(slice).as_usize();
 
-                let (arr, _) = Self::decode(bs, &Type::FixedArray(ty.clone(), array_len), at, 32)?;
+                let (arr, _) = Self::decode_with_size(bs, &Type::FixedArray(ty.clone(), array_len), at, 32)?;
 
                 let values = if let Value::FixedArray(values, _) = arr {
                     values
@@ -364,6 +364,35 @@ impl Value {
                         (Value::Tuple(values), consumed)
                     })
             }
+        }
+    }
+
+    pub fn decode_with_size(raw: &[u8], ty: &Type, base_addr: usize, at: usize) -> anyhow::Result<(Value, usize)> {
+        match ty {
+            Type::FixedArray(ty, size) => {
+                let (base_addr, at) = (base_addr + at, 0);
+                (0..(*size)).try_fold((vec![], 0), |(mut values, total_consumed), _| {
+                    let (value, consumed) = Self::decode(raw, &ty, base_addr, at + total_consumed)?;
+                    values.push(value);
+                    Ok((values, total_consumed + consumed))
+                }).map(|(values, consumed)| {
+                    // reverse? i would think that dynamic would be consumed
+                    let consumed = if ty.is_dynamic() { 32 } else { consumed };
+                    (Value::FixedArray(values, *ty.clone()), consumed)
+                })
+            },
+            Type::Tuple(tys) => {
+                let (base_addr, at) = (base_addr + at, 0);
+                tys.iter().cloned().try_fold((vec![], 0), |(mut values, total_consumed), (name, ty)| {
+                    let (value, consumed) = Self::decode(raw, &ty, base_addr, at + total_consumed)?;
+                    values.push((name, value));
+                    Ok((values, total_consumed + consumed))
+                }).map(|(values, consumed)| {
+                    let consumed = if ty.is_dynamic() { 32 } else { consumed };
+                    (Value::Tuple(values), consumed)
+                })
+            },
+            _ => panic!("Shouldn't be here")
         }
     }
 
@@ -581,6 +610,17 @@ mod test {
                 uint_arr2
             )]
         );
+
+        use hex::FromHex;
+        let data = "0000000000000000000000000000000000000000000000000000000062262ba1000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000016000000000000000000000000000000000000000000000000000000000000000e404e45aaf000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000000000000000000000000000000000000000001f4000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000084b6a5c40000000000000000000000000000000000000000000000000bd373e0061c7e7f94000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004449404b7c00000000000000000000000000000000000000000000000bd373e0061c7e7f9400000000000000000000000016ee789b50d3d49b8f71b5314c367e3fef24d74600000000000000000000000000000000000000000000000000000000".to_string();
+        let values = Value::decode_from_slice(Vec::from_hex(data).unwrap().as_slice(), vec![Type::Uint(256), Type::Array(Box::new(Type::Bytes))].as_slice()).expect("decode_from_slice failed");
+        assert_eq!(values, vec![
+            Value::Uint(U256::from(1646668705), 256),
+            Value::Array(vec![
+                Value::Bytes(hex::decode("04e45aaf000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000000000000000000000000000000000000000001f4000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000084b6a5c40000000000000000000000000000000000000000000000000bd373e0061c7e7f940000000000000000000000000000000000000000000000000000000000000000").unwrap()),
+                Value::Bytes(hex::decode("49404b7c00000000000000000000000000000000000000000000000bd373e0061c7e7f9400000000000000000000000016ee789b50d3d49b8f71b5314c367e3fef24d746").unwrap()),
+            ], Type::Bytes),
+        ]);
     }
 
     #[test]
