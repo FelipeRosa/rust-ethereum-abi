@@ -18,10 +18,10 @@ use ethereum_abi::Abi;
 
 fn main() {
     // Parse ABI JSON file
-    let abi = {
+    let abi: Abi = {
         let file = File::open("some_abi.json").expect("failed to open ABI file");
 
-        Abi::from_reader(file).expect("failed to parse ABI")
+        serde_json::from_reader(file).expect("failed to parse ABI")
     };
 
     // Read some ABI encoded function input
@@ -49,10 +49,10 @@ use web3::types::H256;
 
 fn main() {
     // Parse ABI JSON file
-    let abi = {
+    let abi: Abi = {
         let file = File::open("some_abi.json").expect("failed to open ABI file");
 
-        Abi::from_reader(file).expect("failed to parse ABI")
+        serde_json::from_reader(file).expect("failed to parse ABI")
     };
 
     // Log data
