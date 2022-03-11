@@ -323,16 +323,17 @@ impl Value {
                     .ok_or_else(|| anyhow!("reached end of input while decoding array length"))?;
                 let array_len = U256::from_big_endian(slice).as_usize();
 
-                let (arr, _) = Self::decode(bs, &Type::FixedArray(ty.clone(), array_len), at, 32)?;
+                let at = at + 32;
 
-                let values = if let Value::FixedArray(values, _) = arr {
-                    values
-                } else {
-                    // should always be Value::FixedArray
-                    unreachable!();
-                };
+                (0..array_len)
+                    .try_fold((vec![], 0), |(mut values, total_consumed), _| {
+                        let (value, consumed) = Self::decode(bs, ty, at, total_consumed)?;
 
-                Ok((Value::Array(values, *ty.clone()), 32))
+                        values.push(value);
+
+                        Ok((values, total_consumed + consumed))
+                    })
+                    .map(|(values, _)| (Value::Array(values, *ty.clone()), 32))
             }
 
             Type::Tuple(tys) => {
