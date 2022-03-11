@@ -1,6 +1,6 @@
-use anyhow::{anyhow, Error, Result};
+use anyhow::{anyhow, Result};
 use ethereum_types::H256;
-use serde::{de::Visitor, Deserialize};
+use serde::{de::Visitor, Deserialize, Serialize};
 
 use crate::{params::Param, DecodedParams, Event, Value};
 
@@ -9,7 +9,6 @@ use crate::{params::Param, DecodedParams, Event, Value};
 /// This struct holds defitions for a contracts' ABI.
 ///
 /// ```no_run
-/// use std::str::FromStr;
 /// use ethereum_abi::Abi;
 ///
 /// let abi_json =  r#"[{
@@ -18,7 +17,7 @@ use crate::{params::Param, DecodedParams, Event, Value};
 ///     "inputs": [{"type": "uint256", "name": "x"}]}
 /// ]"#;
 ///
-/// let abi = Abi::from_str(abi_json).unwrap();
+/// let abi: Abi = serde_json::from_str(abi_json).unwrap();
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Abi {
@@ -32,16 +31,6 @@ pub struct Abi {
     pub has_receive: bool,
     /// Whether the contract has the fallback method defined.
     pub has_fallback: bool,
-}
-
-impl Abi {
-    /// Parses a JSON ABI definition from a reader (e.g. a file handle).
-    pub fn from_reader<R>(rdr: R) -> Result<Abi>
-    where
-        R: std::io::Read,
-    {
-        Ok(serde_json::from_reader(rdr)?)
-    }
 }
 
 impl Abi {
@@ -93,12 +82,69 @@ impl Abi {
     }
 }
 
-impl std::str::FromStr for Abi {
-    type Err = Error;
+impl Serialize for Abi {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut entries = vec![];
 
-    /// Parses a JSON ABI definition from a string.
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(serde_json::from_str(s)?)
+        if let Some(c) = &self.constructor {
+            entries.push(AbiEntry {
+                type_: String::from("constructor"),
+                name: None,
+                inputs: Some(c.inputs.clone()),
+                outputs: None,
+                state_mutability: Some(StateMutability::NonPayable),
+                anonymous: None,
+            });
+        }
+
+        for f in &self.functions {
+            entries.push(AbiEntry {
+                type_: String::from("function"),
+                name: Some(f.name.clone()),
+                inputs: Some(f.inputs.clone()),
+                outputs: Some(f.outputs.clone()),
+                state_mutability: Some(f.state_mutability),
+                anonymous: None,
+            });
+        }
+
+        for e in &self.events {
+            entries.push(AbiEntry {
+                type_: String::from("event"),
+                name: Some(e.name.clone()),
+                inputs: Some(e.inputs.clone()),
+                outputs: None,
+                state_mutability: None,
+                anonymous: Some(e.anonymous),
+            });
+        }
+
+        if self.has_receive {
+            entries.push(AbiEntry {
+                type_: String::from("receive"),
+                name: None,
+                inputs: None,
+                outputs: None,
+                state_mutability: Some(StateMutability::Payable),
+                anonymous: None,
+            });
+        }
+
+        if self.has_fallback {
+            entries.push(AbiEntry {
+                type_: String::from("fallback"),
+                name: None,
+                inputs: None,
+                outputs: None,
+                state_mutability: Some(StateMutability::Payable),
+                anonymous: None,
+            });
+        }
+
+        entries.serialize(serializer)
     }
 }
 
@@ -181,7 +227,7 @@ impl Function {
 }
 
 /// Available state mutability values for functions and constructors.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Deserialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum StateMutability {
     /// Specified to not read the blockchain state.
@@ -194,15 +240,20 @@ pub enum StateMutability {
     Payable,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AbiEntry {
     #[serde(rename = "type")]
     type_: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     inputs: Option<Vec<Param>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     outputs: Option<Vec<Param>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     state_mutability: Option<StateMutability>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     anonymous: Option<bool>,
 }
 
@@ -308,14 +359,14 @@ impl<'de> Visitor<'de> for AbiVisitor {
 
 #[cfg(test)]
 mod test {
-    use pretty_assertions::assert_eq;
-    use std::str::FromStr;
-
     use ethereum_types::{H160, U256};
+    use pretty_assertions::assert_eq;
 
     use crate::types::Type;
 
     use super::*;
+
+    const TEST_ABI_V1: &str = r#"[{"inputs":[{"internalType":"address","name":"a","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"x","type":"address"},{"indexed":false,"internalType":"uint256","name":"y","type":"uint256"}],"name":"E","type":"event"},{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"}],"name":"f","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"stateMutability":"payable","type":"receive"}]"#;
 
     fn test_function() -> Function {
         Function {
@@ -393,8 +444,7 @@ mod test {
 
     #[test]
     fn works_v1() {
-        let s = r#"[{"inputs":[{"internalType":"address","name":"a","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"x","type":"address"},{"indexed":false,"internalType":"uint256","name":"y","type":"uint256"}],"name":"E","type":"event"},{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"}],"name":"f","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"stateMutability":"payable","type":"receive"}]"#;
-        let abi = Abi::from_str(s).unwrap();
+        let abi: Abi = serde_json::from_str(TEST_ABI_V1).unwrap();
 
         assert_eq!(
             abi,
@@ -478,7 +528,7 @@ mod test {
             }
         ]);
 
-        let abi = Abi::from_str(&v.to_string()).unwrap();
+        let abi: Abi = serde_json::from_str(&v.to_string()).unwrap();
 
         assert_eq!(
             abi,
@@ -509,5 +559,15 @@ mod test {
                 has_fallback: false,
             }
         );
+    }
+
+    #[test]
+    fn test_serde() {
+        let abi: Abi = serde_json::from_str(TEST_ABI_V1).unwrap();
+
+        let ser_abi = serde_json::to_string(&abi).expect("serialized abi");
+        let de_abi: Abi = serde_json::from_str(&ser_abi).expect("deserialized abi");
+
+        assert_eq!(abi, de_abi);
     }
 }
