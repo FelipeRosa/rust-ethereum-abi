@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, rc::Rc};
 
 use crate::{types::Type, Value};
@@ -80,6 +80,52 @@ pub struct Param {
     pub indexed: Option<bool>,
 }
 
+impl Param {
+    fn build_param_entry(&self) -> ParamEntry {
+        let tuple_params = match &self.type_ {
+            Type::Tuple(params) => Some(params.clone()),
+            Type::Array(ty) | Type::FixedArray(ty, _) => {
+                if let Type::Tuple(params) = ty.as_ref() {
+                    Some(params.clone())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+
+        let components = tuple_params.map(|params| {
+            params
+                .iter()
+                .map(|(name, ty)| {
+                    Param {
+                        name: name.clone(),
+                        type_: ty.clone(),
+                        indexed: None,
+                    }
+                    .build_param_entry()
+                })
+                .collect()
+        });
+
+        ParamEntry {
+            name: self.name.clone(),
+            type_: param_type_string(&self.type_),
+            indexed: self.indexed,
+            components,
+        }
+    }
+}
+
+impl Serialize for Param {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.build_param_entry().serialize(serializer)
+    }
+}
+
 impl<'a> Deserialize<'a> for Param {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -98,12 +144,23 @@ impl<'a> Deserialize<'a> for Param {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+fn param_type_string(ty: &Type) -> String {
+    match ty {
+        Type::Tuple(_) => String::from("tuple"),
+        Type::Array(ty) => format!("{}[]", param_type_string(ty)),
+        Type::FixedArray(ty, size) => format!("{}[{}]", param_type_string(ty), size),
+        _ => format!("{}", ty),
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct ParamEntry {
     pub name: String,
     #[serde(rename = "type")]
     pub type_: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub indexed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub components: Option<Vec<ParamEntry>>,
 }
 
@@ -290,19 +347,20 @@ fn check_fixed_bytes_size(i: &usize) -> bool {
 
 #[cfg(test)]
 mod test {
-    use serde_json::json;
-
     use super::*;
 
+    use pretty_assertions::assert_eq;
+    use serde_json::json;
+
     #[test]
-    fn deserialize_uint() {
+    fn serde_uint() {
         for i in (8..=256).step_by(8) {
             let v = json!({
                 "name": "a",
                 "type": format!("uint{}", i),
             });
 
-            let param: Param = serde_json::from_value(v).unwrap();
+            let param: Param = serde_json::from_value(v.clone()).expect("param deserialized");
 
             assert_eq!(
                 param,
@@ -312,18 +370,22 @@ mod test {
                     indexed: None
                 }
             );
+
+            let param_json = serde_json::to_value(param).expect("param serialized");
+
+            assert_eq!(v, param_json);
         }
     }
 
     #[test]
-    fn deserialize_int() {
+    fn serde_int() {
         for i in (8..=256).step_by(8) {
             let v = json!({
                 "name": "a",
                 "type": format!("int{}", i),
             });
 
-            let param: Param = serde_json::from_value(v).unwrap();
+            let param: Param = serde_json::from_value(v.clone()).expect("param deserialized");
 
             assert_eq!(
                 param,
@@ -333,17 +395,21 @@ mod test {
                     indexed: None
                 }
             );
+
+            let param_json = serde_json::to_value(param).expect("param serialized");
+
+            assert_eq!(v, param_json);
         }
     }
 
     #[test]
-    fn deserialize_address() {
+    fn serde_address() {
         let v = json!({
             "name": "a",
             "type": "address",
         });
 
-        let param: Param = serde_json::from_value(v).unwrap();
+        let param: Param = serde_json::from_value(v.clone()).expect("param deserialized");
 
         assert_eq!(
             param,
@@ -353,16 +419,20 @@ mod test {
                 indexed: None
             }
         );
+
+        let param_json = serde_json::to_value(param).expect("param serialized");
+
+        assert_eq!(v, param_json);
     }
 
     #[test]
-    fn deserialize_bool() {
+    fn serde_bool() {
         let v = json!({
             "name": "a",
             "type": "bool",
         });
 
-        let param: Param = serde_json::from_value(v).unwrap();
+        let param: Param = serde_json::from_value(v.clone()).expect("param deserialized");
 
         assert_eq!(
             param,
@@ -372,16 +442,20 @@ mod test {
                 indexed: None
             }
         );
+
+        let param_json = serde_json::to_value(param).expect("param serialized");
+
+        assert_eq!(v, param_json);
     }
 
     #[test]
-    fn deserialize_string() {
+    fn serde_string() {
         let v = json!({
             "name": "a",
             "type": "string",
         });
 
-        let param: Param = serde_json::from_value(v).unwrap();
+        let param: Param = serde_json::from_value(v.clone()).expect("param deserialized");
 
         assert_eq!(
             param,
@@ -391,17 +465,21 @@ mod test {
                 indexed: None
             }
         );
+
+        let param_json = serde_json::to_value(param).expect("param serialized");
+
+        assert_eq!(v, param_json);
     }
 
     #[test]
-    fn deserialize_bytes() {
+    fn serde_bytes() {
         for i in 1..=32 {
             let v = json!({
                 "name": "a",
                 "type": format!("bytes{}", i),
             });
 
-            let param: Param = serde_json::from_value(v).unwrap();
+            let param: Param = serde_json::from_value(v.clone()).expect("param deserialized");
 
             assert_eq!(
                 param,
@@ -411,6 +489,10 @@ mod test {
                     indexed: None
                 }
             );
+
+            let param_json = serde_json::to_value(param).expect("param serialized");
+
+            assert_eq!(v, param_json);
         }
 
         let v = json!({
@@ -418,7 +500,7 @@ mod test {
             "type": "bytes",
         });
 
-        let param: Param = serde_json::from_value(v).unwrap();
+        let param: Param = serde_json::from_value(v.clone()).expect("param deserialized");
 
         assert_eq!(
             param,
@@ -428,15 +510,19 @@ mod test {
                 indexed: None
             }
         );
+
+        let param_json = serde_json::to_value(param).expect("param serialized");
+
+        assert_eq!(v, param_json);
     }
 
     #[test]
-    fn deserialize_array() {
+    fn serde_array() {
         let v = json!({
             "name": "a",
             "type": "uint256[]",
         });
-        let param: Param = serde_json::from_value(v).unwrap();
+        let param: Param = serde_json::from_value(v.clone()).expect("param deserialized");
 
         assert_eq!(
             param,
@@ -446,15 +532,19 @@ mod test {
                 indexed: None,
             }
         );
+
+        let param_json = serde_json::to_value(param).expect("param serialized");
+
+        assert_eq!(v, param_json);
     }
 
     #[test]
-    fn deserialize_nested_array() {
+    fn serde_nested_array() {
         let v = json!({
             "name": "a",
             "type": "address[][]",
         });
-        let param: Param = serde_json::from_value(v).unwrap();
+        let param: Param = serde_json::from_value(v.clone()).expect("param deserialized");
 
         assert_eq!(
             param,
@@ -464,15 +554,19 @@ mod test {
                 indexed: None,
             }
         );
+
+        let param_json = serde_json::to_value(param).expect("param serialized");
+
+        assert_eq!(v, param_json);
     }
 
     #[test]
-    fn deserialize_mixed_array() {
+    fn serde_mixed_array() {
         let v = json!({
             "name": "a",
             "type": "string[2][]",
         });
-        let param: Param = serde_json::from_value(v).unwrap();
+        let param: Param = serde_json::from_value(v.clone()).expect("param deserialized");
 
         assert_eq!(
             param,
@@ -483,11 +577,16 @@ mod test {
             }
         );
 
+        let param_json = serde_json::to_value(param).expect("param serialized");
+
+        assert_eq!(v, param_json);
+
         let v = json!({
             "name": "a",
             "type": "string[][3]",
         });
-        let param: Param = serde_json::from_value(v).unwrap();
+
+        let param: Param = serde_json::from_value(v.clone()).expect("param deserialized");
 
         assert_eq!(
             param,
@@ -497,10 +596,14 @@ mod test {
                 indexed: None,
             }
         );
+
+        let param_json = serde_json::to_value(param).expect("param serialized");
+
+        assert_eq!(v, param_json);
     }
 
     #[test]
-    fn deserialize_tuple() {
+    fn serde_tuple() {
         let v = json!({
           "name": "s",
           "type": "tuple",
@@ -530,7 +633,7 @@ mod test {
           ]
         });
 
-        let param: Param = serde_json::from_value(v).unwrap();
+        let param: Param = serde_json::from_value(v.clone()).expect("param deserialized");
 
         assert_eq!(
             param,
@@ -549,6 +652,10 @@ mod test {
                 ]),
                 indexed: None,
             }
-        )
+        );
+
+        let param_json = serde_json::to_value(param).expect("param serialized");
+
+        assert_eq!(v, param_json);
     }
 }
