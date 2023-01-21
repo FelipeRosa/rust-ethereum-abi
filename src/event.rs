@@ -56,7 +56,7 @@ impl Event {
                 .ok_or_else(|| anyhow!("missing event topic"))?;
         }
 
-        let mut topics_values: VecDeque<_> = VecDeque::from(topics.to_vec());
+        let mut topics_values = VecDeque::from(topics.to_vec());
 
         let mut data_values = VecDeque::from(Value::decode_from_slice(
             data,
@@ -88,7 +88,7 @@ impl Event {
             } else {
                 data_values
                     .pop_front()
-                    .ok_or_else(|| anyhow!("insuficient data values"))
+                    .ok_or_else(|| anyhow!("insufficient data values"))
             };
 
             decoded.push((input, decoded_value?));
