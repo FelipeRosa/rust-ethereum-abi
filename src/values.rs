@@ -515,7 +515,7 @@ mod test {
 
         let chars = "abcdef0123456789".as_bytes();
 
-        for i in 0..(str_len as usize) {
+        for i in 0..str_len {
             bs[64 + i] = chars[rng.gen_range(0..chars.len())];
         }
 
@@ -535,7 +535,7 @@ mod test {
         let bytes_len: usize = rng.gen_range(0..64);
         bs[63] = bytes_len as u8; // big-endian bytes length
 
-        for i in 0..(bytes_len as usize) {
+        for i in 0..bytes_len {
             bs[64 + i] = rng.gen();
         }
 
