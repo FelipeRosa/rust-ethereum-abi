@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use ethereum_types::H256;
 use serde::{de::Visitor, Deserialize, Serialize};
 
-use crate::{params::Param, DecodedParams, Event, Value};
+use crate::{params::Param, DecodedParams, Error, Event, Value};
 
 /// Contract ABI (Abstract Binary Interface).
 ///
@@ -27,6 +27,8 @@ pub struct Abi {
     pub functions: Vec<Function>,
     /// Contract defined events.
     pub events: Vec<Event>,
+    /// Contract defined errors.
+    pub errors: Vec<Error>,
     /// Whether the contract has the receive method defined.
     pub has_receive: bool,
     /// Whether the contract has the fallback method defined.
@@ -119,6 +121,17 @@ impl Serialize for Abi {
                 outputs: None,
                 state_mutability: None,
                 anonymous: Some(e.anonymous),
+            });
+        }
+
+        for e in &self.errors {
+            entries.push(AbiEntry {
+                type_: String::from("error"),
+                name: Some(e.name.clone()),
+                inputs: Some(e.inputs.clone()),
+                outputs: None,
+                state_mutability: None,
+                anonymous: None,
             });
         }
 
@@ -274,6 +287,7 @@ impl<'de> Visitor<'de> for AbiVisitor {
             constructor: None,
             functions: vec![],
             events: vec![],
+            errors: vec![],
             has_receive: false,
             has_fallback: false,
         };
@@ -345,6 +359,16 @@ impl<'de> Visitor<'de> for AbiVisitor {
                         });
                     }
 
+                    "error" => {
+                        let inputs = entry.inputs.unwrap_or_default();
+
+                        let name = entry.name.ok_or_else(|| {
+                            serde::de::Error::custom("missing error name".to_string())
+                        })?;
+
+                        abi.errors.push(Error { name, inputs });
+                    }
+
                     _ => {
                         return Err(serde::de::Error::custom(format!(
                             "invalid ABI entry type: {}",
@@ -366,7 +390,7 @@ mod test {
 
     use super::*;
 
-    const TEST_ABI_V1: &str = r#"[{"inputs":[{"internalType":"address","name":"a","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"x","type":"address"},{"indexed":false,"internalType":"uint256","name":"y","type":"uint256"}],"name":"E","type":"event"},{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"}],"name":"f","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"stateMutability":"payable","type":"receive"}]"#;
+    const TEST_ABI_V1: &str = r#"[{"inputs":[{"internalType":"address","name":"a","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"x","type":"address"},{"indexed":false,"internalType":"uint256","name":"y","type":"uint256"}],"name":"E","type":"event"},{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"}],"name":"f","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"stateMutability":"payable","type":"receive"},{"type":"error","inputs": [{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"Err"}]"#;
 
     fn test_function() -> Function {
         Function {
@@ -419,6 +443,7 @@ mod test {
             constructor: None,
             functions: vec![fun],
             events: vec![],
+            errors: vec![],
             has_receive: false,
             has_fallback: false,
         };
@@ -486,6 +511,21 @@ mod test {
                         }
                     ],
                     anonymous: false
+                }],
+                errors: vec![Error {
+                    name: "Err".to_string(),
+                    inputs: vec![
+                        Param {
+                            name: "x".to_string(),
+                            type_: Type::Uint(256),
+                            indexed: None
+                        },
+                        Param {
+                            name: "y".to_string(),
+                            type_: Type::Uint(256),
+                            indexed: None
+                        },
+                    ]
                 }],
                 has_receive: true,
                 has_fallback: false
@@ -555,6 +595,7 @@ mod test {
                     state_mutability: StateMutability::NonPayable,
                 }],
                 events: vec![],
+                errors: vec![],
                 has_receive: false,
                 has_fallback: false,
             }

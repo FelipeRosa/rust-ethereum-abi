@@ -4,6 +4,15 @@ use std::collections::VecDeque;
 
 use crate::{DecodedParams, Param, Type, Value};
 
+/// Contract Error Definition
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Error {
+    /// Error name.
+    pub name: String,
+    /// Error inputs.
+    pub inputs: Vec<Param>,
+}
+
 /// Contract event definition.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Event {
@@ -202,6 +211,7 @@ mod test {
             constructor: None,
             functions: vec![],
             events: vec![evt],
+            errors: vec![],
             has_receive: false,
             has_fallback: false,
         };
